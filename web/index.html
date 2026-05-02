@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>npocut</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">np</span>
+          <div>
+            <h1>npocut</h1>
+            <p id="projectStatus">No project loaded</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <label class="file-button">
+            <input id="videoInput" type="file" accept="video/*" />
+            <span>Load Video</span>
+          </label>
+          <label class="file-button secondary">
+            <input id="srtInput" type="file" accept=".srt,text/plain" />
+            <span>Load SRT</span>
+          </label>
+          <label class="file-button secondary">
+            <input id="planInput" type="file" accept=".csv,.txt,text/csv,text/plain" />
+            <span>Import Plan</span>
+          </label>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <section class="media-panel">
+          <div class="video-shell">
+            <video id="video" controls playsinline></video>
+            <div id="emptyVideo" class="empty-video">
+              <div class="empty-time">00:00.000</div>
+              <div class="empty-line"></div>
+            </div>
+          </div>
+
+          <div class="transport">
+            <button id="back5" title="Back 5 seconds" aria-label="Back 5 seconds">-5</button>
+            <button id="back1" title="Back 1 second" aria-label="Back 1 second">-1</button>
+            <div class="time-readout" id="timeReadout">00:00.000</div>
+            <button id="forward1" title="Forward 1 second" aria-label="Forward 1 second">+1</button>
+            <button id="forward5" title="Forward 5 seconds" aria-label="Forward 5 seconds">+5</button>
+          </div>
+
+          <div class="mark-row">
+            <button id="setIn" class="strong">IN</button>
+            <input id="startInput" inputmode="decimal" placeholder="00:00.000" />
+            <button id="setOut" class="strong">OUT</button>
+            <input id="endInput" inputmode="decimal" placeholder="00:15.000" />
+            <input id="titleInput" placeholder="Label" />
+            <input id="outputInput" placeholder="short_01.mp4" />
+            <button id="addSegment" class="primary">Add</button>
+          </div>
+        </section>
+
+        <aside class="side-panel">
+          <div class="mode-tabs" role="tablist">
+            <button class="mode-tab active" data-mode="clip">Cut</button>
+            <button class="mode-tab" data-mode="remove">Submod</button>
+            <button class="mode-tab" data-mode="shorts">Shorts</button>
+            <button class="mode-tab" data-mode="advancedCut">Adv Cut</button>
+            <button class="mode-tab" data-mode="srt">SRT</button>
+            <button class="mode-tab" data-mode="burnSrt">Burn SRT</button>
+          </div>
+
+          <div class="metric-strip">
+            <div>
+              <span>Rows</span>
+              <strong id="rowCount">0</strong>
+            </div>
+            <div>
+              <span>Total</span>
+              <strong id="totalDuration">00:00.000</strong>
+            </div>
+          </div>
+
+          <div class="subtitle-search">
+            <div class="subtitle-tools">
+              <input id="srtQuery" placeholder="Search subtitles" />
+              <button id="timestampNavMode" class="secondary timestamp-nav" type="button">Time Nav</button>
+              <label class="height-control" title="Subtitle panel height">
+                <span>Height</span>
+                <input id="subtitleHeight" type="range" min="360" max="1400" step="20" />
+              </label>
+            </div>
+            <div id="cueList" class="cue-list"></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="plan-panel">
+        <div class="plan-header">
+          <div>
+            <h2 id="planTitle">Cut Plan</h2>
+            <p id="planMeta">clip_plan.csv</p>
+          </div>
+          <div class="plan-actions">
+            <button id="clearPlan" class="secondary">Clear</button>
+            <button id="exportPlan" class="primary">Export</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="grab-col"></th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Duration</th>
+                <th>Label</th>
+                <th class="output-col">Output</th>
+                <th class="action-col"></th>
+              </tr>
+            </thead>
+            <tbody id="segmentRows"></tbody>
+          </table>
+        </div>
+
+        <div class="command-box">
+          <code id="commandText">Load media and add rows to generate a command.</code>
+          <button id="copyCommand" class="secondary">Copy</button>
+          <button id="runCommand" class="primary">Terminal</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
