@@ -1,5 +1,377 @@
 # npocut - timestamp based CLI 剪辑工具
 
+## 日本語版
+
+`npocut` は、コマンドラインと timestamp を中心にした動画編集ツールセットです。YouTube 長尺動画、単一 Shorts、字幕生成、字幕微修正、字幕焼き込み、SRT からの編集点検索に使えます。Web UI はローカルブラウザで動作し、動画はアップロードされません。
+
+### macOS Quick Start
+
+macOS に必ず Python が入っているとは限りません。まず確認します。
+
+```bash
+python3 --version
+```
+
+`python3` がない場合は、Homebrew で Python、Node.js、ffmpeg をまとめて入れるのが簡単です。
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install python ffmpeg-full node
+```
+
+Python がすでにある場合は、Node.js と ffmpeg だけで十分です。
+
+```bash
+brew install ffmpeg-full node
+```
+
+Node.js だけ不足している場合:
+
+```bash
+brew install node
+node --version
+npm --version
+```
+
+Homebrew を使わない場合は、Node.js 公式サイト `https://nodejs.org/` から macOS 用インストーラを入れてください。インストール後に確認します。
+
+```bash
+node --version
+npm --version
+```
+
+リポジトリを取得し、Python 依存関係を入れます。
+
+```bash
+git clone https://github.com/roclive/npocut.git
+cd npocut
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Web UI を起動します。
+
+```bash
+npm run dev
+```
+
+ターミナルに表示された URL、通常は `http://localhost:5173/` を開きます。ページ上で動画と SRT を読み込むと、`Cut`、`Submod`、`Shorts`、`Adv Cut`、`SRT`、`Burn SRT` を使えます。
+
+### 依存関係
+
+| 依存関係 | 用途 | インストール |
+| --- | --- | --- |
+| Python 3.10+ | すべての `.py` スクリプトの実行 | `brew install python` |
+| ffmpeg / ffprobe | 動画の切り出し、結合、変換、字幕焼き込み | `brew install ffmpeg-full` |
+| Node.js | Web UI の実行 | `brew install node` |
+| faster-whisper | ローカル SRT 生成 | `pip install -r requirements.txt` |
+| OpenAI API key | 任意。OpenAI の転写モデルで SRT を生成 | `export OPENAI_API_KEY="..."` |
+
+`generate_srt_openai.py` は Python 標準ライブラリで OpenAI API を直接呼び出すため、`openai` Python パッケージは不要です。
+
+### Web UI
+
+```bash
+cd npocut
+npm run dev
+```
+
+Web UI は plan ファイルを Python スクリプトがあるディレクトリへ直接保存します。
+
+| UI モード | 機能 | 出力/保存ファイル |
+| --- | --- | --- |
+| `Cut` | 手動で IN/OUT を打ち、残す範囲の plan を作成 | `clip_plan.csv` |
+| `Submod` | SRT の start/end と本文を直接編集。start を変更すると前の字幕の end、end を変更すると次の字幕の start が同期されます。`Time Nav` で timestamp クリックによる動画ジャンプに切り替え | 読み込んだ `.srt` |
+| `Shorts` | 字幕行左の `Add` で、単一 short に残す範囲へ追加。隣接行は export 時に自動結合 | `shorts_plan.csv` |
+| `Adv Cut` | 字幕行左の `Del` で削除対象をマークし、反転した keep plan を出力 | `cut_plan_new.csv` |
+| `SRT` | `python3 generate_srt.py ...` コマンドを生成 | plan なし |
+| `Burn SRT` | `python3 burn_existing_srt.py ...` コマンドを生成 | plan なし |
+
+下部コマンド欄のボタン:
+
+| ボタン | 作用 |
+| --- | --- |
+| `Copy` | 現在のコマンドをコピー |
+| `Terminal` | 現在の plan を保存してから、macOS Terminal を現在のディレクトリで開き、コマンドを実行 |
+
+### Timestamp 形式
+
+以下の形式に対応しています。
+
+```text
+75.5
+01:15.500
+00:01:15.500
+00:01:15,500
+```
+
+### よく使う流れ
+
+#### YouTube 長尺動画
+
+```bash
+python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
+npm run dev
+# UI で Cut または Adv Cut を使って plan を export
+python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"
+python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" -o "long.final.mp4"
+```
+
+#### YouTube Short を 1 本作る
+
+Web UI の `Shorts` モードは「一度に 1 本の short を作る」設計です。複数の字幕行で `Add/Keep` を押すと、export 時に隣接または重複した timestamp 範囲を結合し、すべて同じ `output` として書き出します。
+
+```bash
+python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
+npm run dev
+# UI で Shorts に切り替え、字幕左の Add を押し、shorts_plan.csv を export
+python3 make_shorts.py "long.mp4" shorts_plan.csv \
+  --srt "long.srt" \
+  --burn-srt \
+  --out-dir shorts_out \
+  --vertical blur
+```
+
+`shorts_plan.csv` の例:
+
+```csv
+output,start,end,title
+short_01.mp4,00:01:10.000,00:01:58.000,hook
+short_01.mp4,00:03:20.000,00:03:42.000,follow up
+```
+
+この例では `short_01.mp4` だけが生成され、同じ `output` の複数行が順番に結合されます。
+
+### コマンド一覧
+
+| スクリプト | 役割 | よく使うコマンド |
+| --- | --- | --- |
+| `generate_srt.py` | faster-whisper でローカル SRT を生成 | `python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"` |
+| `generate_srt_openai.py` | OpenAI transcription API で SRT を生成 | `python3 generate_srt_openai.py "long.mp4" -l zh -o "long.srt"` |
+| `burn_subs.py` | SRT 生成後に確認し、字幕を焼き込み | `python3 burn_subs.py "long.mp4"` |
+| `burn_existing_srt.py` | 既存 SRT を動画へ焼き込み | `python3 burn_existing_srt.py "long.mp4" "long.srt" -o "long.subbed.mp4"` |
+| `srt_find.py` | SRT を検索して編集点を探す | `python3 srt_find.py "long.srt" -q "keyword" -c 2` |
+| `cut_plan.py` | keep plan に従って切り出し、並べ替え、新 SRT を生成 | `python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"` |
+| `remove_ranges.py` | 削除範囲 plan に従って削除し、残りを結合 | `python3 remove_ranges.py "long.mp4" --plan remove_ranges.txt -o "long.clean.mp4" --srt "long.srt"` |
+| `srt_slice.py` | keep plan だけを使って SRT を再生成 | `python3 srt_slice.py "long.srt" clip_plan.csv -o "long.cut.srt"` |
+| `make_shorts.py` | 字幕付き縦型 short を 1 本生成 | `python3 make_shorts.py "long.mp4" shorts_plan.csv --srt "long.srt" --burn-srt --vertical blur` |
+| `ffprobe_info.py` | 動画の長さ、コーデック、解像度などを表示 | `python3 ffprobe_info.py "long.mp4"` |
+
+### コマンド引数リファレンス
+
+#### `generate_srt.py`
+
+```bash
+python3 generate_srt.py VIDEO [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `VIDEO` | 入力動画 | 必須 |
+| `-o, --output` | 出力 SRT パス | `<video>.srt` |
+| `-m, --model` | faster-whisper モデル。例: `tiny`、`base`、`small`、`medium`、`large-v3` | `small` |
+| `-l, --language` | 入力言語。例: `zh`、`ja`、`en` | 自動検出 |
+
+#### `generate_srt_openai.py`
+
+```bash
+export OPENAI_API_KEY="your OpenAI API key"
+python3 generate_srt_openai.py VIDEO [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `VIDEO` | 入力動画または音声 | 必須 |
+| `-o, --output` | 出力 SRT パス | `<video>.srt` |
+| `-m, --model` | OpenAI 転写モデル。古い `medium` などのローカルモデル名は互換扱いで無視 | `gpt-4o-transcribe-diarize` |
+| `-l, --language` | 入力言語。例: `zh`、`ja`、`en` | 自動検出 |
+| `--prompt` | 転写モデルへ渡す文脈プロンプト | なし |
+| `--chunk-seconds` | 長尺動画を一時音声に切る秒数 | `300` |
+| `--audio-bitrate` | 一時音声のビットレート | `48k` |
+| `--timeout` | API リクエストのタイムアウト秒数 | `600` |
+| `--keep-temp` | 一時音声チャンクを残す | オフ |
+
+#### `burn_subs.py`
+
+```bash
+python3 burn_subs.py INPUT [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `INPUT` | 入力 MP4 | 必須 |
+| `-o, --output` | 出力動画 | `<input>.subbed.mp4` |
+| `-s, --srt` | SRT パス | `<input>.srt` |
+| `-m, --model` | faster-whisper モデル | `small` |
+| `-l, --language` | 入力言語 | 自動検出 |
+| `--keep-srt` | SRT ファイルを残す | デフォルトで保持 |
+| `-y, --yes` | SRT 生成後の手動確認をスキップ | オフ |
+
+#### `burn_existing_srt.py`
+
+```bash
+python3 burn_existing_srt.py VIDEO SRT [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `VIDEO` | 入力 MP4 | 必須 |
+| `SRT` | 既存字幕ファイル | 必須 |
+| `-o, --output` | 出力動画 | `<video>.subbed.mp4` |
+
+#### `cut_plan.py`
+
+```bash
+python3 cut_plan.py VIDEO PLAN [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `VIDEO` | 入力動画 | 必須 |
+| `PLAN` | `start,end,title` 形式の keep plan | 必須 |
+| `-o, --output` | 出力 MP4 | `<video>.cut.mp4` |
+| `--srt` | 元 SRT。指定すると retime 済み SRT も生成 | なし |
+| `--out-srt` | 出力 SRT パス | `<output>.srt` |
+| `--copy` | stream copy で高速化。切り口付近の精度は再エンコードより低い | オフ |
+| `--crf` | x264 CRF | `18` |
+| `--preset` | x264 preset | `veryfast` |
+| `--dry-run` | ffmpeg コマンドだけ表示 | オフ |
+| `--keep-temp` | 一時ファイルを残す | オフ |
+
+#### `remove_ranges.py`
+
+```bash
+python3 remove_ranges.py VIDEO [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `VIDEO` | 入力動画 | 必須 |
+| `-p, --plan` | 削除範囲ファイル。CSV、`start-end`、`start --> end` に対応 | なし |
+| `-r, --remove` | 削除範囲を直接指定。複数回指定可 | なし |
+| `-o, --output` | 出力 MP4 | `<video>.clean.mp4` |
+| `--srt` | 元 SRT。指定すると retime 済み SRT も生成 | なし |
+| `--out-srt` | 出力 SRT パス | `<output>.srt` |
+| `--write-keep-plan` | 自動計算した keep plan を書き出す | なし |
+| `--copy` | stream copy で高速化 | オフ |
+| `--crf` | x264 CRF | `18` |
+| `--preset` | x264 preset | `veryfast` |
+| `--dry-run` | ffmpeg コマンドだけ表示 | オフ |
+| `--keep-temp` | 一時ファイルを残す | オフ |
+
+#### `make_shorts.py`
+
+```bash
+python3 make_shorts.py VIDEO PLAN [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `VIDEO` | 入力長尺動画 | 必須 |
+| `PLAN` | `output,start,end,title` 形式の Shorts plan | 必須 |
+| `--out-dir` | 出力ディレクトリ | `shorts_out` |
+| `--srt` | 元 SRT。指定すると short 用に retime した SRT も生成 | なし |
+| `--burn-srt` | retime 済み SRT を short に焼き込む | オフ |
+| `--no-srt-output` | サイドカー SRT を出力しない | オフ |
+| `--vertical` | 縦型変換モード: `crop`、`blur`、`pad`、`none` | `crop` |
+| `--target` | 出力サイズ | `1080x1920` |
+| `--max-seconds` | 長さ警告の閾値。`0` で無効 | `180` |
+| `--strict-duration` | `--max-seconds` 超過時に失敗扱い | オフ |
+| `--crf` | x264 CRF | `19` |
+| `--preset` | x264 preset | `veryfast` |
+| `--font-size` | 焼き込み字幕のフォントサイズ | `52` |
+| `--margin-v` | 焼き込み字幕の下マージン | `220` |
+| `--font-name` | 焼き込み字幕のフォント名 | `Helvetica` |
+| `--dry-run` | ffmpeg コマンドだけ表示 | オフ |
+| `--keep-temp` | 一時タイムラインを残す | オフ |
+
+縦型モード:
+
+| モード | 説明 |
+| --- | --- |
+| `crop` | 中央を 9:16 にクロップ。人物が中央にいる動画向き |
+| `blur` | 背景をぼかし、元動画を中央配置。横動画を切りたくない場合向き |
+| `pad` | 黒帯で余白を埋める |
+| `none` | アスペクト比を変更しない |
+
+#### `srt_find.py`
+
+```bash
+python3 srt_find.py SRT [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `SRT` | 入力字幕 | 必須 |
+| `-q, --query` | 検索テキストまたは正規表現 | なし |
+| `-c, --context` | ヒット前後に表示する字幕数 | `1` |
+| `--all` | すべての字幕を表示 | `--query` なしの場合はデフォルト |
+| `--ignore-case` | 大文字小文字を無視 | オン |
+
+#### `srt_slice.py`
+
+```bash
+python3 srt_slice.py SRT PLAN [OPTIONS]
+```
+
+| 引数 | 説明 | デフォルト |
+| --- | --- | --- |
+| `SRT` | 元字幕 | 必須 |
+| `PLAN` | `start,end,title` 形式の keep plan | 必須 |
+| `-o, --output` | 出力 SRT | `<srt>.slice.srt` |
+
+#### `ffprobe_info.py`
+
+```bash
+python3 ffprobe_info.py VIDEO
+```
+
+| 引数 | 説明 |
+| --- | --- |
+| `VIDEO` | 情報を確認する動画 |
+
+### Plan ファイル形式
+
+#### `clip_plan.csv` / `cut_plan_new.csv`
+
+```csv
+start,end,title
+00:01:10.000,00:02:04.000,opening hook
+00:08:30.000,00:09:12.000,best explanation
+```
+
+CSV の行順が出力動画の順番になります。
+
+#### `remove_ranges.txt`
+
+```text
+00:03:12.000,00:03:28.000,dead air
+00:10:00.000-00:10:20.000
+00:24:15.000 --> 00:24:40.000 long pause
+```
+
+#### `shorts_plan.csv`
+
+```csv
+output,start,end,title
+short_01.mp4,00:01:10.000,00:01:58.000,hook
+short_01.mp4,00:03:20.000,00:03:42.000,follow up
+```
+
+同じ `output` の複数行は、1 本の short として結合されます。
+
+### サンプルファイル
+
+- `examples/clip_plan.csv`
+- `examples/remove_ranges.txt`
+- `examples/shorts_plan.csv`
+
+---
+
+## 中文版
+
 `npocut` 是一个基于命令行和 timestamp 的视频剪辑工具集，适合 YouTube 长视频、单个 Shorts、字幕生成、字幕微调、字幕烧录和按 SRT 快速找剪辑点。Web UI 运行在本机浏览器里，视频不会上传。
 
 ## Quick Start on macOS
