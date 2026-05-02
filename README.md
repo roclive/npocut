@@ -10,17 +10,32 @@ macOS 不应假设一定有可用的 Python。先检查：
 python3 --version
 ```
 
-如果没有 `python3`，推荐用 Homebrew 安装：
+如果没有 `python3`，推荐用 Homebrew 安装。顺便安装 Node.js 和 ffmpeg：
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 brew install python ffmpeg-full node
 ```
 
-如果已经有 Python，只需要安装 ffmpeg 和 Node：
+如果已经有 Python，只需要快速安装 Node.js 和 ffmpeg：
 
 ```bash
 brew install ffmpeg-full node
+```
+
+如果只缺 Node.js：
+
+```bash
+brew install node
+node --version
+npm --version
+```
+
+不想用 Homebrew 的话，也可以从 Node.js 官网下载安装包：`https://nodejs.org/`。安装后确认：
+
+```bash
+node --version
+npm --version
 ```
 
 克隆并安装 Python 依赖：
