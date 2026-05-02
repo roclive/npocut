@@ -1,29 +1,58 @@
 # npocut - timestamp based CLI 剪辑工具
 
-`npocut` 接在现有的 `burn_subs.py` / `burn_existing_srt.py` 后面用：先得到 SRT，再按时间戳剪长视频、删除片段、重排片段、批量生成 Shorts，并自动生成剪辑后重新计时的 SRT。
+`npocut` 是一个基于命令行和 timestamp 的视频剪辑工具集，适合 YouTube 长视频、单个 Shorts、字幕生成、字幕微调、字幕烧录和按 SRT 快速找剪辑点。Web UI 运行在本机浏览器里，视频不会上传。
+
+## Quick Start on macOS
+
+macOS 不应假设一定有可用的 Python。先检查：
+
+```bash
+python3 --version
+```
+
+如果没有 `python3`，推荐用 Homebrew 安装：
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install python ffmpeg-full node
+```
+
+如果已经有 Python，只需要安装 ffmpeg 和 Node：
+
+```bash
+brew install ffmpeg-full node
+```
+
+克隆并安装 Python 依赖：
+
+```bash
+git clone https://github.com/roclive/npocut.git
+cd npocut
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+启动 Web UI：
+
+```bash
+npm run dev
+```
+
+打开终端显示的地址，通常是 `http://localhost:5173/`。在页面里加载视频和 SRT 后，可以用 `Cut`、`Submod`、`Shorts`、`Adv Cut`、`SRT`、`Burn SRT`。
 
 ## 依赖
 
-- Python 3.10+
-- `ffmpeg` / `ffprobe`
-- 可选：`faster-whisper`，仅 `generate_srt.py` / `make_srt_only.py` / `burn_subs.py` 需要
-- 可选：OpenAI API key，仅 `generate_srt_openai.py` 需要
-- Web UI：Node.js，直接运行 `npm run dev`，没有第三方 npm 包
+| 依赖 | 用途 | 安装 |
+| --- | --- | --- |
+| Python 3.10+ | 运行所有 `.py` 脚本 | `brew install python` |
+| ffmpeg / ffprobe | 视频切割、拼接、转码、字幕烧录 | `brew install ffmpeg-full` |
+| Node.js | 运行 Web UI | `brew install node` |
+| faster-whisper | 本地生成 SRT | `pip install -r requirements.txt` |
+| OpenAI API key | 可选，用 OpenAI 转写模型生成 SRT | `export OPENAI_API_KEY="..."` |
 
-## 脚本
-
-| 脚本 | 用途 |
-| --- | --- |
-| `generate_srt.py` | 复用当前目录 `burn_subs.py`，只生成 SRT，不烧录 |
-| `generate_srt_openai.py` | 使用 OpenAI transcription API 生成 SRT，不用本地 Whisper |
-| `make_srt_only.py` | `generate_srt.py` 的兼容旧入口，只生成 SRT，不烧录 |
-| `burn_existing_srt.py` | 把已有 SRT 烧录进视频 |
-| `srt_find.py` | 搜索 SRT，快速找可剪的 timestamp |
-| `cut_plan.py` | 按计划保留片段；行顺序就是最终视频顺序 |
-| `remove_ranges.py` | 给出要删掉的区间，自动保留其余部分并拼接 |
-| `srt_slice.py` | 只按计划生成重新计时的 SRT |
-| `make_shorts.py` | 从长视频批量生成 9:16 Shorts，可按每个输出合并多段 |
-| `ffprobe_info.py` | 查看视频时长、分辨率、帧率、音频 |
+`generate_srt_openai.py` 使用标准库直接调用 OpenAI API，不需要安装 `openai` Python 包。
 
 ## Web UI
 
@@ -32,21 +61,23 @@ cd npocut
 npm run dev
 ```
 
-打开终端显示的地址，加载视频和 SRT。网页在浏览器本地读取文件，不上传视频；剪辑人员可以打 IN/OUT、搜索字幕、拖拽重排。点击 Export 后，计划文件会直接写到当前目录，也就是 Python 脚本所在目录：`clip_plan.csv` / `remove_ranges.txt` / `shorts_plan.csv` / `cut_plan_new.csv`。
+Web UI 会把 plan 文件直接写到 Python 脚本所在目录：
 
-Web UI 有 6 个模式：
+| UI 模式 | 功能 | 导出/保存文件 |
+| --- | --- | --- |
+| `Cut` | 手动打 IN/OUT，生成保留片段计划 | `clip_plan.csv` |
+| `Submod` | 直接编辑 SRT 的 start/end 和字幕正文；改 start 同步上一条 end，改 end 同步下一条 start；`Time Nav` 可切换 timestamp 点击跳转视频 | 当前加载的 `.srt` |
+| `Shorts` | 在字幕行左侧点 `Add`，把字幕加入一个 short 的保留计划；相邻条目导出时自动合并 | `shorts_plan.csv` |
+| `Adv Cut` | 在字幕行左侧点 `Del` 标记要删的字幕，再导出反转后的保留计划 | `cut_plan_new.csv` |
+| `SRT` | 生成 `python3 generate_srt.py ...` 命令 | 无 plan |
+| `Burn SRT` | 生成 `python3 burn_existing_srt.py ...` 命令 | 无 plan |
 
-- `Cut`：生成 `python3 cut_plan.py ...`
-- `Submod`：直接编辑 SRT 字幕的 start/end timestamp 和字幕正文；改 start 会同步上一条 end，改 end 会同步下一条 start；打开 `Time Nav` 后点击 timestamp 会跳转视频；点击 `Save SRT` 保存
-- `Shorts`：生成 `python3 make_shorts.py ...`；字幕行左侧 `Add` 会把该字幕加入保留计划，按钮变 `Keep`
-- `Adv Cut`：在字幕行左侧点 `Del` 标记要删除的字幕行，再点 `Export Cut Plan` 导出反转后的保留计划 `cut_plan_new.csv`
-- `SRT`：生成 `python3 generate_srt.py "video.mp4" -o "video.srt"`
-- `Burn SRT`：生成 `python3 burn_existing_srt.py "video.mp4" "video.srt" -o "video.subbed.mp4"`
+底部命令栏右侧：
 
-底部命令栏右侧有两个按钮：
-
-- `Copy`：复制当前命令
-- `Terminal`：先保存当前 plan，再在当前目录打开 macOS Terminal 并执行当前命令
+| 按钮 | 作用 |
+| --- | --- |
+| `Copy` | 复制当前命令 |
+| `Terminal` | 先保存当前 plan，再在当前目录打开 macOS Terminal 并执行命令 |
 
 ## 时间格式
 
@@ -59,77 +90,244 @@ Web UI 有 6 个模式：
 00:01:15,500
 ```
 
-## 1. 只生成 SRT
+## 常用流程
 
-本地模型版：
-
-```bash
-python3 generate_srt.py "long.mp4" -m medium -l ja
-```
-
-自定义输出字幕文件路径：
+### YouTube 长视频
 
 ```bash
-python3 generate_srt.py "long.mp4" -o "long.srt" -m medium
+python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
+npm run dev
+# UI 中用 Cut 或 Adv Cut 导出 plan
+python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"
+python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" -o "long.final.mp4"
 ```
 
-OpenAI API 版，不用本地 Whisper：
+### 生成一个 YouTube Short
+
+Web UI 的 `Shorts` 模式现在是“一次生成一个 short”的逻辑：点多个字幕行的 `Add/Keep` 后，导出时会先合并相邻或重叠的字幕区间，再把所有区间写成同一个 `output`。
+
+```bash
+python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
+npm run dev
+# UI 中切到 Shorts，点字幕左侧 Add，导出 shorts_plan.csv
+python3 make_shorts.py "long.mp4" shorts_plan.csv \
+  --srt "long.srt" \
+  --burn-srt \
+  --out-dir shorts_out \
+  --vertical blur
+```
+
+示例 `shorts_plan.csv`：
+
+```csv
+output,start,end,title
+short_01.mp4,00:01:10.000,00:01:58.000,hook
+short_01.mp4,00:03:20.000,00:03:42.000,follow up
+```
+
+这会只生成一个 `short_01.mp4`，由 CSV 里同一个 `output` 的所有行按顺序拼接而成。
+
+## 命令总览
+
+| 脚本 | 作用 | 常用命令 |
+| --- | --- | --- |
+| `generate_srt.py` | 本地 faster-whisper 生成 SRT | `python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"` |
+| `generate_srt_openai.py` | OpenAI transcription API 生成 SRT | `python3 generate_srt_openai.py "long.mp4" -l zh -o "long.srt"` |
+| `burn_subs.py` | 生成 SRT 后人工确认，再烧录字幕 | `python3 burn_subs.py "long.mp4"` |
+| `burn_existing_srt.py` | 把已有 SRT 烧录到视频 | `python3 burn_existing_srt.py "long.mp4" "long.srt" -o "long.subbed.mp4"` |
+| `srt_find.py` | 搜索 SRT 找剪辑点 | `python3 srt_find.py "long.srt" -q "keyword" -c 2` |
+| `cut_plan.py` | 按保留片段计划剪辑、重排、生成新 SRT | `python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"` |
+| `remove_ranges.py` | 按删除区间计划删除并拼回 | `python3 remove_ranges.py "long.mp4" --plan remove_ranges.txt -o "long.clean.mp4" --srt "long.srt"` |
+| `srt_slice.py` | 只根据保留计划重新生成 SRT | `python3 srt_slice.py "long.srt" clip_plan.csv -o "long.cut.srt"` |
+| `make_shorts.py` | 生成一个竖版 short，可烧录字幕 | `python3 make_shorts.py "long.mp4" shorts_plan.csv --srt "long.srt" --burn-srt --vertical blur` |
+| `ffprobe_info.py` | 查看视频时长、编码、分辨率等信息 | `python3 ffprobe_info.py "long.mp4"` |
+
+## 命令参数参考
+
+### `generate_srt.py`
+
+```bash
+python3 generate_srt.py VIDEO [OPTIONS]
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `VIDEO` | 输入视频 | 必填 |
+| `-o, --output` | 输出 SRT 路径 | `<video>.srt` |
+| `-m, --model` | faster-whisper 模型，如 `tiny`、`base`、`small`、`medium`、`large-v3` | `small` |
+| `-l, --language` | 强制输入语言，如 `zh`、`ja`、`en` | 自动检测 |
+
+### `generate_srt_openai.py`
 
 ```bash
 export OPENAI_API_KEY="你的 OpenAI API key"
-python3 generate_srt_openai.py "long.mp4" -l zh -o "long.openai.srt"
+python3 generate_srt_openai.py VIDEO [OPTIONS]
 ```
 
-`generate_srt_openai.py` 默认使用 `gpt-4o-transcribe-diarize`，因为这个模型会返回带 start/end 的分段，适合直接生成 SRT。脚本会自动把长视频切成临时音频段后逐段转写，再合并成一个 SRT。
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `VIDEO` | 输入视频或音频 | 必填 |
+| `-o, --output` | 输出 SRT 路径 | `<video>.srt` |
+| `-m, --model` | OpenAI 转写模型；旧的 `medium` 等本地模型名会被兼容并忽略 | `gpt-4o-transcribe-diarize` |
+| `-l, --language` | 输入语言，如 `zh`、`ja`、`en` | 自动检测 |
+| `--prompt` | 给转写模型的上下文提示 | 无 |
+| `--chunk-seconds` | 长视频临时音频切片秒数 | `300` |
+| `--audio-bitrate` | 临时音频码率 | `48k` |
+| `--timeout` | API 请求超时秒数 | `600` |
+| `--keep-temp` | 保留临时音频切片 | 关闭 |
 
-如果沿用旧命令里的 `-m medium`，新脚本会把它识别为本地 Whisper 模型参数并忽略，仍然使用 OpenAI 默认模型。
-
-也可以继续使用现有脚本：
+### `burn_subs.py`
 
 ```bash
-python3 burn_subs.py "long.mp4"
+python3 burn_subs.py INPUT [OPTIONS]
 ```
 
-它生成 SRT 后会暂停，这时可以取消烧录并保留 SRT。
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `INPUT` | 输入 MP4 | 必填 |
+| `-o, --output` | 输出视频 | `<input>.subbed.mp4` |
+| `-s, --srt` | SRT 路径 | `<input>.srt` |
+| `-m, --model` | faster-whisper 模型 | `small` |
+| `-l, --language` | 强制输入语言 | 自动检测 |
+| `--keep-srt` | 保留 SRT 文件 | 默认保留 |
+| `-y, --yes` | 跳过 SRT 生成后的人工确认 | 关闭 |
 
-## 2. 用 SRT 找剪辑点
+### `burn_existing_srt.py`
 
 ```bash
-python3 srt_find.py "long.srt" -q "keyword" -c 2
-python3 srt_find.py "long.srt" --all
+python3 burn_existing_srt.py VIDEO SRT [OPTIONS]
 ```
 
-输出会显示每条字幕的开始/结束时间，适合复制到计划文件。
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `VIDEO` | 输入 MP4 | 必填 |
+| `SRT` | 已有字幕文件 | 必填 |
+| `-o, --output` | 输出视频 | `<video>.subbed.mp4` |
 
-## 3. 保留片段、重排片段
+### `cut_plan.py`
 
-计划文件 `clip_plan.csv`：
+```bash
+python3 cut_plan.py VIDEO PLAN [OPTIONS]
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `VIDEO` | 输入视频 | 必填 |
+| `PLAN` | `start,end,title` 保留片段计划 | 必填 |
+| `-o, --output` | 输出 MP4 | `<video>.cut.mp4` |
+| `--srt` | 源 SRT；提供后会同步生成重新计时的 SRT | 无 |
+| `--out-srt` | 指定输出 SRT 路径 | `<output>.srt` |
+| `--copy` | 用 stream copy 加速，切点附近不如重编码精确 | 关闭 |
+| `--crf` | x264 CRF | `18` |
+| `--preset` | x264 preset | `veryfast` |
+| `--dry-run` | 只打印 ffmpeg 命令，不执行 | 关闭 |
+| `--keep-temp` | 保留临时片段文件 | 关闭 |
+
+### `remove_ranges.py`
+
+```bash
+python3 remove_ranges.py VIDEO [OPTIONS]
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `VIDEO` | 输入视频 | 必填 |
+| `-p, --plan` | 删除区间文件，支持 CSV、`start-end`、`start --> end` | 无 |
+| `-r, --remove` | 直接传入一个删除区间，可重复 | 无 |
+| `-o, --output` | 输出 MP4 | `<video>.clean.mp4` |
+| `--srt` | 源 SRT；提供后会同步生成重新计时的 SRT | 无 |
+| `--out-srt` | 指定输出 SRT 路径 | `<output>.srt` |
+| `--write-keep-plan` | 写出自动计算的保留计划 | 无 |
+| `--copy` | 用 stream copy 加速，切点附近不如重编码精确 | 关闭 |
+| `--crf` | x264 CRF | `18` |
+| `--preset` | x264 preset | `veryfast` |
+| `--dry-run` | 只打印 ffmpeg 命令，不执行 | 关闭 |
+| `--keep-temp` | 保留临时片段文件 | 关闭 |
+
+### `make_shorts.py`
+
+```bash
+python3 make_shorts.py VIDEO PLAN [OPTIONS]
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `VIDEO` | 输入长视频 | 必填 |
+| `PLAN` | `output,start,end,title` Shorts 计划 | 必填 |
+| `--out-dir` | 输出目录 | `shorts_out` |
+| `--srt` | 源 SRT；提供后会给 short 生成重新计时的 SRT | 无 |
+| `--burn-srt` | 把重新计时的 SRT 烧录进 short | 关闭 |
+| `--no-srt-output` | 不输出旁路 SRT 文件 | 关闭 |
+| `--vertical` | 竖屏模式：`crop`、`blur`、`pad`、`none` | `crop` |
+| `--target` | 输出尺寸 | `1080x1920` |
+| `--max-seconds` | 超时提醒阈值；设为 `0` 关闭 | `180` |
+| `--strict-duration` | 超过 `--max-seconds` 时直接失败 | 关闭 |
+| `--crf` | x264 CRF | `19` |
+| `--preset` | x264 preset | `veryfast` |
+| `--font-size` | 烧录字幕字号 | `52` |
+| `--margin-v` | 烧录字幕底部边距 | `220` |
+| `--font-name` | 烧录字幕字体 | `Helvetica` |
+| `--dry-run` | 只打印 ffmpeg 命令，不执行 | 关闭 |
+| `--keep-temp` | 保留临时时间线文件 | 关闭 |
+
+竖屏模式说明：
+
+| 模式 | 说明 |
+| --- | --- |
+| `crop` | 居中裁切成 9:16，适合人物在中间 |
+| `blur` | 模糊背景 + 原视频居中，适合横屏内容不想裁掉 |
+| `pad` | 黑边补齐 |
+| `none` | 不改比例 |
+
+### `srt_find.py`
+
+```bash
+python3 srt_find.py SRT [OPTIONS]
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `SRT` | 输入字幕 | 必填 |
+| `-q, --query` | 搜索文本或正则 | 无 |
+| `-c, --context` | 显示命中项前后多少条字幕 | `1` |
+| `--all` | 列出全部字幕 | 未传 `--query` 时默认 |
+| `--ignore-case` | 忽略大小写 | 开启 |
+
+### `srt_slice.py`
+
+```bash
+python3 srt_slice.py SRT PLAN [OPTIONS]
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `SRT` | 源字幕 | 必填 |
+| `PLAN` | `start,end,title` 保留片段计划 | 必填 |
+| `-o, --output` | 输出 SRT | `<srt>.slice.srt` |
+
+### `ffprobe_info.py`
+
+```bash
+python3 ffprobe_info.py VIDEO
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `VIDEO` | 要查看信息的视频 |
+
+## Plan 文件格式
+
+### `clip_plan.csv` / `cut_plan_new.csv`
 
 ```csv
 start,end,title
 00:01:10.000,00:02:04.000,opening hook
 00:08:30.000,00:09:12.000,best explanation
-00:04:05.000,00:04:38.000,move this later
 ```
 
-执行：
+CSV 行顺序就是输出视频顺序。
 
-```bash
-python3 cut_plan.py "long.mp4" clip_plan.csv \
-  -o "long.cut.mp4" \
-  --srt "long.srt"
-```
-
-输出：
-
-- `long.cut.mp4`
-- `long.cut.srt`
-
-CSV 行顺序就是输出视频的顺序，所以调换片段只要调换行。
-
-## 4. 删除片段并自动拼回
-
-计划文件 `remove_ranges.txt`：
+### `remove_ranges.txt`
 
 ```text
 00:03:12.000,00:03:28.000,dead air
@@ -137,86 +335,15 @@ CSV 行顺序就是输出视频的顺序，所以调换片段只要调换行。
 00:24:15.000 --> 00:24:40.000 long pause
 ```
 
-执行：
-
-```bash
-python3 remove_ranges.py "long.mp4" \
-  --plan remove_ranges.txt \
-  -o "long.clean.mp4" \
-  --srt "long.srt" \
-  --write-keep-plan keep_plan.csv
-```
-
-`keep_plan.csv` 是计算出来的保留片段，也可以再交给 `cut_plan.py` 做二次编辑。
-
-在 Web UI 里也可以用 `Adv Cut`：加载视频和 SRT 后，在字幕行左侧点 `Del` 做删除标记。连续或重叠的标记会先合并成删除区间，然后导出时反转成剩余的保留区间。点击 `Export Cut Plan` 会生成 `cut_plan_new.csv`，页面会提示文件已生成，然后可以运行：
-
-```bash
-python3 cut_plan.py "long.mp4" cut_plan_new.csv -o "long.cut.mp4" --srt "long.srt"
-```
-
-## 5. 批量生成 Shorts
-
-计划文件 `shorts_plan.csv`：
+### `shorts_plan.csv`
 
 ```csv
 output,start,end,title
 short_01.mp4,00:01:10.000,00:01:58.000,hook
-short_02.mp4,00:12:04.000,00:12:53.000,first part
-short_02.mp4,00:13:20.000,00:13:42.000,second part
+short_01.mp4,00:03:20.000,00:03:42.000,follow up
 ```
 
-同一个 `output` 可以有多行，脚本会按行顺序拼成同一个短视频。Web UI 的 `Shorts` 模式会把点了 `Add/Keep` 的相邻字幕先合并，再导出为同一个 `output`，所以一次只生成一个 short。
-
-```bash
-python3 make_shorts.py "long.mp4" shorts_plan.csv \
-  --srt "long.srt" \
-  --burn-srt \
-  --out-dir shorts_out \
-  --vertical crop
-```
-
-常用竖屏模式：
-
-- `--vertical crop`：居中裁切成 9:16，适合人物在中间
-- `--vertical blur`：模糊背景 + 原视频居中，适合横屏内容不想裁掉
-- `--vertical pad`：黑边补齐
-- `--vertical none`：不改比例
-
-`--max-seconds` 默认是提醒阈值，可按账号/平台要求调整；加 `--strict-duration` 会把超时当成错误。
-
-## 6. 烧录剪辑后的字幕
-
-普通横屏成片可以先剪出重新计时的 SRT，再用根目录已有脚本烧录：
-
-```bash
-python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" \
-  -o "long.cut.subbed.mp4"
-```
-
-Shorts 可以直接在 `make_shorts.py` 里加 `--burn-srt`。
-
-也可以在 Web UI 里选择 `Burn SRT`，加载视频和 SRT 后复制底部命令。
-
-## 推荐流程
-
-### YouTube 长视频
-
-```bash
-python3 generate_srt.py "long.mp4" -m medium
-python3 srt_find.py "long.srt" -q "topic"
-python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"
-python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" -o "long.final.mp4"
-```
-
-### YouTube Shorts 批量
-
-```bash
-python3 generate_srt.py "long.mp4" -m medium
-npm run dev
-# 在 UI 中导出 shorts_plan.csv 到当前目录
-python3 make_shorts.py "long.mp4" shorts_plan.csv --srt "long.srt" --burn-srt --vertical blur
-```
+同一个 `output` 的多行会被拼成同一个 short。
 
 ## 示例文件
 
