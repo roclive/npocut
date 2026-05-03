@@ -14,6 +14,7 @@ Rows with the same output are concatenated in row order.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import tempfile
 from collections import OrderedDict
@@ -21,15 +22,18 @@ from pathlib import Path
 
 from common import (
     FFMPEG,
+    Cue,
     Segment,
     cut_segments,
     fail,
     format_clock,
     load_segment_plan,
+    parse_srt,
     require_file,
     require_ffmpeg,
     run,
     safe_output_name,
+    write_srt,
     write_srt_for_segments,
 )
 
@@ -49,9 +53,10 @@ def parse_target(value: str) -> tuple[int, int]:
 
 
 def subtitle_filter(font_size: int, margin_v: int, font_name: str) -> str:
+    outline = max(1, min(3, round(font_size / 14)))
     style = (
         f"FontName={font_name},FontSize={font_size},PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=0,"
+        f"OutlineColour=&H00000000,BorderStyle=1,Outline={outline},Shadow=0,"
         f"Alignment=2,MarginV={margin_v}"
     ).replace(",", r"\,")
     return f"subtitles=subs.srt:force_style='{style}'"
@@ -73,6 +78,83 @@ def base_video_filter(mode: str, width: int, height: int) -> str:
     raise ValueError(f"Unsupported simple filter mode: {mode}")
 
 
+def default_subtitle_style(vertical_mode: str) -> tuple[int, int]:
+    if vertical_mode == "none":
+        return 18, 40
+    return 10, 28
+
+
+def default_subtitle_line_chars(vertical_mode: str) -> int:
+    if vertical_mode == "none":
+        return 42
+    return 10
+
+
+def visual_width(text: str) -> float:
+    width = 0.0
+    for char in text:
+        width += 0.55 if char.isascii() else 1.0
+    return width
+
+
+def is_leading_punctuation(text: str) -> bool:
+    return bool(text) and text[0] in ",，.。!！?？:：;；、)]}）】」』"
+
+
+def wrap_subtitle_text(text: str, max_width: int) -> list[str]:
+    tokens = re.findall(r"[A-Za-z0-9_.-]+|\s+|.", text.strip())
+    if not tokens:
+        return []
+
+    lines: list[str] = []
+    current = ""
+    for token in tokens:
+        if token.isspace():
+            token = " "
+        candidate = current + token
+        if current and visual_width(candidate) > max_width and not is_leading_punctuation(token):
+            lines.append(current.strip())
+            current = token.lstrip()
+        else:
+            current = candidate
+
+        while visual_width(current) > max_width:
+            line = ""
+            remaining = current
+            for idx, char in enumerate(current):
+                if line and visual_width(line + char) > max_width:
+                    lines.append(line.strip())
+                    remaining = current[idx:]
+                    break
+                line += char
+            else:
+                remaining = ""
+            current = remaining.lstrip()
+
+    if current.strip():
+        lines.append(current.strip())
+
+    cleaned: list[str] = []
+    for line in lines:
+        if cleaned and is_leading_punctuation(line):
+            cleaned[-1] += line[0]
+            line = line[1:].lstrip()
+        if line:
+            cleaned.append(line)
+    return cleaned
+
+
+def write_wrapped_srt(source: Path, output: Path, max_width: int) -> None:
+    cues = parse_srt(source)
+    wrapped = []
+    for cue in cues:
+        lines: list[str] = []
+        for line in cue.lines:
+            lines.extend(wrap_subtitle_text(line, max_width))
+        wrapped.append(Cue(start=cue.start, end=cue.end, lines=tuple(lines)))
+    write_srt(wrapped, output)
+
+
 def render_short(
     input_clip: Path,
     output_path: Path,
@@ -86,6 +168,7 @@ def render_short(
     font_size: int,
     margin_v: int,
     font_name: str,
+    subtitle_line_chars: int,
     dry_run: bool,
 ) -> None:
     require_ffmpeg()
@@ -109,7 +192,7 @@ def render_short(
             if burn_srt:
                 if not srt_path:
                     fail("--burn-srt requires --srt")
-                shutil.copy2(srt_path, tmp / "subs.srt")
+                write_wrapped_srt(srt_path, tmp / "subs.srt", subtitle_line_chars)
 
         cmd = [FFMPEG, "-y", "-i", "in.mp4"]
         sub_filter = subtitle_filter(font_size, margin_v, font_name) if burn_srt else ""
@@ -212,8 +295,14 @@ def main() -> int:
     )
     ap.add_argument("--crf", type=int, default=19, help="x264 CRF for final shorts")
     ap.add_argument("--preset", default="veryfast", help="x264 preset")
-    ap.add_argument("--font-size", type=int, default=52, help="Burned subtitle font size")
-    ap.add_argument("--margin-v", type=int, default=220, help="Burned subtitle bottom margin")
+    ap.add_argument("--font-size", type=int, default=None, help="Burned subtitle font size")
+    ap.add_argument("--margin-v", type=int, default=None, help="Burned subtitle bottom margin")
+    ap.add_argument(
+        "--subtitle-line-chars",
+        type=int,
+        default=None,
+        help="Approximate characters per burned subtitle line",
+    )
     ap.add_argument("--font-name", default="Helvetica", help="Burned subtitle font")
     ap.add_argument("--dry-run", action="store_true", help="Print ffmpeg commands only")
     ap.add_argument("--keep-temp", action="store_true", help="Keep temporary timeline files")
@@ -226,6 +315,14 @@ def main() -> int:
         require_file(args.srt, "SRT")
 
     target = parse_target(args.target)
+    default_font_size, default_margin_v = default_subtitle_style(args.vertical)
+    font_size = args.font_size if args.font_size is not None else default_font_size
+    margin_v = args.margin_v if args.margin_v is not None else default_margin_v
+    subtitle_line_chars = (
+        args.subtitle_line_chars
+        if args.subtitle_line_chars is not None
+        else default_subtitle_line_chars(args.vertical)
+    )
     segments = load_segment_plan(args.plan)
     grouped = group_segments(segments)
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -284,9 +381,10 @@ def main() -> int:
                 target=target,
                 crf=args.crf,
                 preset=args.preset,
-                font_size=args.font_size,
-                margin_v=args.margin_v,
+                font_size=font_size,
+                margin_v=margin_v,
                 font_name=args.font_name,
+                subtitle_line_chars=subtitle_line_chars,
                 dry_run=args.dry_run,
             )
 

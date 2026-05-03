@@ -34,6 +34,7 @@ const commandScripts = new Set([
   "make_shorts.py",
   "generate_srt.py",
   "burn_existing_srt.py",
+  "burn_vertical_srt.py",
 ]);
 
 function safePath(urlPath) {
@@ -100,7 +101,12 @@ function openTerminal(command) {
     throw new Error("Terminal launch is currently implemented for macOS only");
   }
   validateCommand(command);
-  const shellCommand = `cd ${shellQuote(__dirname)} && ${command}`;
+  const venvBin = join(__dirname, ".venv", "bin");
+  const shellCommand = [
+    `cd ${shellQuote(__dirname)}`,
+    `export PATH=${shellQuote(`${venvBin}:$PATH`)}`,
+    command,
+  ].join(" && ");
   const script = [
     'tell application "Terminal"',
     "activate",

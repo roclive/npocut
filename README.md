@@ -84,10 +84,11 @@ Web UI は plan ファイルを Python スクリプトがあるディレクト�
 | --- | --- | --- |
 | `Cut` | 手動で IN/OUT を打ち、残す範囲の plan を作成 | `clip_plan.csv` |
 | `Submod` | SRT の start/end と本文を直接編集。start を変更すると前の字幕の end、end を変更すると次の字幕の start が同期されます。`Time Nav` で timestamp クリックによる動画ジャンプに切り替え | 読み込んだ `.srt` |
-| `Shorts` | 字幕行左の `Add` で、単一 short に残す範囲へ追加。隣接行は export 時に自動結合 | `shorts_plan.csv` |
+| `Shorts` | 字幕行左の `Add` で、単一 short に残す範囲へ追加。export 時は選択した timestamp を行ごとに出力し、自動結合しません | `shorts_plan.csv` |
 | `Adv Cut` | 字幕行左の `Del` で削除対象をマークし、反転した keep plan を出力 | `cut_plan_new.csv` |
 | `SRT` | `python3 generate_srt.py ...` コマンドを生成 | plan なし |
 | `Burn SRT` | `python3 burn_existing_srt.py ...` コマンドを生成 | plan なし |
+| `Burn 9:16` | `python3 burn_vertical_srt.py ...` コマンドを生成し、既存 SRT を 9:16 縦動画へ焼き込み | plan なし |
 
 下部コマンド欄のボタン:
 
@@ -121,7 +122,7 @@ python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" -o "long.final.mp4"
 
 #### YouTube Short を 1 本作る
 
-Web UI の `Shorts` モードは「一度に 1 本の short を作る」設計です。複数の字幕行で `Add/Keep` を押すと、export 時に隣接または重複した timestamp 範囲を結合し、すべて同じ `output` として書き出します。
+Web UI の `Shorts` モードは「一度に 1 本の short を作る」設計です。複数の字幕行で `Add/Keep` を押すと、export 時は選択した timestamp を行ごとに `shorts_plan.csv` へ書き出し、すべて同じ `output` にします。同じ `output` の複数行は short 生成時に順番に結合され、選択していない時間は飛ばされます。
 
 ```bash
 python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
@@ -454,10 +455,11 @@ Web UI 会把 plan 文件直接写到 Python 脚本所在目录：
 | --- | --- | --- |
 | `Cut` | 手动打 IN/OUT，生成保留片段计划 | `clip_plan.csv` |
 | `Submod` | 直接编辑 SRT 的 start/end 和字幕正文；改 start 同步上一条 end，改 end 同步下一条 start；`Time Nav` 可切换 timestamp 点击跳转视频 | 当前加载的 `.srt` |
-| `Shorts` | 在字幕行左侧点 `Add`，把字幕加入一个 short 的保留计划；相邻条目导出时自动合并 | `shorts_plan.csv` |
+| `Shorts` | 在字幕行左侧点 `Add`，把字幕加入一个 short 的保留计划；导出时按选择逐行写入，不自动合并 timestamp | `shorts_plan.csv` |
 | `Adv Cut` | 在字幕行左侧点 `Del` 标记要删的字幕，再导出反转后的保留计划 | `cut_plan_new.csv` |
 | `SRT` | 生成 `python3 generate_srt.py ...` 命令 | 无 plan |
 | `Burn SRT` | 生成 `python3 burn_existing_srt.py ...` 命令 | 无 plan |
+| `Burn 9:16` | 生成 `python3 burn_vertical_srt.py ...` 命令，把现有 SRT 烧进 9:16 竖屏视频 | 无 plan |
 
 底部命令栏右侧：
 
@@ -491,7 +493,7 @@ python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" -o "long.final.mp4"
 
 ### 生成一个 YouTube Short
 
-Web UI 的 `Shorts` 模式现在是“一次生成一个 short”的逻辑：点多个字幕行的 `Add/Keep` 后，导出时会先合并相邻或重叠的字幕区间，再把所有区间写成同一个 `output`。
+Web UI 的 `Shorts` 模式现在是“一次生成一个 short”的逻辑：点多个字幕行的 `Add/Keep` 后，导出时会按选择逐行写入 `shorts_plan.csv`，并把所有区间写成同一个 `output`。同一个 `output` 的多行会在生成 short 时按顺序拼接，中间未选择的时间会被跳过。
 
 ```bash
 python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"

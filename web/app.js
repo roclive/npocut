@@ -42,8 +42,6 @@ const state = {
 };
 
 const ADVANCED_CUT_MERGE_GAP_SECONDS = 0.5;
-const SHORTS_MERGE_GAP_SECONDS = 0.5;
-
 const subtitleHeight = clamp(
   Number(localStorage.getItem("npocut.subtitleHeight") || 1040),
   360,
@@ -87,6 +85,11 @@ const modeMeta = {
     title: "Burn SRT",
     file: "",
     script: "burn_existing_srt.py",
+  },
+  burnVerticalSrt: {
+    title: "Burn 9:16 SRT",
+    file: "",
+    script: "burn_vertical_srt.py",
   },
 };
 
@@ -421,33 +424,16 @@ function currentShortsOutputName() {
 
 function buildShortsSegments() {
   const output = currentShortsOutputName();
-  const sorted = [...state.segments]
+  return [...state.segments]
     .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
-    .sort((a, b) => a.start - b.start || a.end - b.end);
-  const merged = [];
-
-  for (const segment of sorted) {
-    const previous = merged[merged.length - 1];
-    if (!previous || segment.start > previous.end + SHORTS_MERGE_GAP_SECONDS) {
-      merged.push({
-        start: segment.start,
-        end: segment.end,
-        titleParts: [segment.title || ""],
-      });
-      continue;
-    }
-
-    previous.end = Math.max(previous.end, segment.end);
-    if (segment.title) previous.titleParts.push(segment.title);
-  }
-
-  return merged.map((segment, index) => ({
-    start: segment.start,
-    end: segment.end,
-    title: segment.titleParts.filter(Boolean).join(" "),
-    output,
-    sourceCueId: `shorts_merged_${index}`,
-  }));
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .map((segment, index) => ({
+      start: segment.start,
+      end: segment.end,
+      title: segment.title || "",
+      output,
+      sourceCueId: segment.sourceCueId || `shorts_segment_${index}`,
+    }));
 }
 
 function moveRow(index, delta) {
@@ -739,9 +725,9 @@ async function exportPlan() {
       setStatus(message);
       window.alert(message);
     } else if (state.mode === "shorts") {
-      const mergedCount = buildShortsSegments().length;
+      const segmentCount = buildShortsSegments().length;
       const outputName = currentShortsOutputName();
-      const message = `shorts_plan.csv 已生成：${result.path} / 输出 ${outputName} / 合并片段 ${mergedCount} 行`;
+      const message = `shorts_plan.csv 已生成：${result.path} / 输出 ${outputName} / 保留片段 ${segmentCount} 行`;
       setStatus(message);
       window.alert(message);
     } else {
@@ -818,6 +804,8 @@ function renderCommand() {
     command = `python3 ${modeMeta.srt.script} "${video}" -o "${base}.srt"`;
   } else if (state.mode === "burnSrt") {
     command = `python3 ${modeMeta.burnSrt.script} "${video}" "${srt}" -o "${base}.subbed.mp4"`;
+  } else if (state.mode === "burnVerticalSrt") {
+    command = `python3 ${modeMeta.burnVerticalSrt.script} "${video}" "${srt}" -o "${base}.vertical.subbed.mp4" --vertical crop --target 1080x1920`;
   } else if (state.mode === "advancedCut") {
     command = `python3 ${modeMeta.advancedCut.script} "${video}" ${plan} -o "${base}.cut.mp4" --srt "${srt}"`;
   } else {
