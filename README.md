@@ -183,6 +183,203 @@ Rows with the same `output` are concatenated into one Short.
 | `make_shorts.py` | Generate one subtitle-aware vertical Short | `python3 make_shorts.py "long.mp4" shorts_plan.csv --srt "long.srt" --burn-srt --vertical blur` |
 | `ffprobe_info.py` | Show video duration, codec, resolution, and streams | `python3 ffprobe_info.py "long.mp4"` |
 
+### Command Parameter Reference
+
+#### `generate_srt.py`
+
+```bash
+python3 generate_srt.py VIDEO [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source video file | required |
+| `-o, --output` | Output SRT path | `<video>.srt` |
+| `-m, --model` | faster-whisper model: `tiny`, `base`, `small`, `medium`, `large-v3` | `small` |
+| `-l, --language` | Force input language, e.g. `zh`, `ja`, `en` | auto-detect |
+
+#### `generate_srt_openai.py`
+
+```bash
+export OPENAI_API_KEY="your OpenAI API key"
+python3 generate_srt_openai.py VIDEO [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source video/audio file | required |
+| `-o, --output` | Output SRT path | `<video>.srt` |
+| `-m, --model` | OpenAI transcription model; old local Whisper sizes are accepted for compatibility | `gpt-4o-transcribe-diarize` |
+| `-l, --language` | Input language code, e.g. `zh`, `ja`, `en` | auto-detect |
+| `--prompt` | Optional transcription prompt/context | none |
+| `--chunk-seconds` | Audio chunk length in seconds | `300` |
+| `--audio-bitrate` | Temporary audio bitrate | `48k` |
+| `--timeout` | API request timeout in seconds | `600` |
+| `--keep-temp` | Keep temporary audio chunks | off |
+
+#### `burn_subs.py`
+
+```bash
+python3 burn_subs.py INPUT [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `INPUT` | Source MP4 file | required |
+| `-o, --output` | Output MP4 | `<input>.subbed.mp4` |
+| `-s, --srt` | SRT path | `<input>.srt` |
+| `-m, --model` | faster-whisper model | `small` |
+| `-l, --language` | Force language code | auto-detect |
+| `--keep-srt` | Keep generated SRT after burning | kept |
+| `-y, --yes` | Skip manual confirmation after SRT generation | off |
+
+#### `burn_existing_srt.py`
+
+```bash
+python3 burn_existing_srt.py VIDEO SRT [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source MP4 file | required |
+| `SRT` | Existing SRT subtitle file | required |
+| `-o, --output` | Output MP4 | `<video>.subbed.mp4` |
+
+#### `burn_vertical_srt.py`
+
+```bash
+python3 burn_vertical_srt.py VIDEO SRT [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source video | required |
+| `SRT` | Existing SRT subtitle file | required |
+| `-o, --output` | Output MP4 | `<video>.vertical.subbed.mp4` |
+| `--vertical` | 9:16 mode: `crop`, `blur`, `pad` | `crop` |
+| `--target` | Output dimensions | `1080x1920` |
+| `--crf` | x264 CRF, lower is larger/better | `19` |
+| `--preset` | x264 preset | `veryfast` |
+| `--font-size` | Burned subtitle font size | auto |
+| `--margin-v` | Burned subtitle bottom margin | auto |
+| `--subtitle-line-chars` | Approximate characters per subtitle line | auto |
+| `--font-name` | Burned subtitle font | `Helvetica` |
+| `--dry-run` | Print ffmpeg command only | off |
+
+#### `cut_plan.py`
+
+```bash
+python3 cut_plan.py VIDEO PLAN [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source video | required |
+| `PLAN` | Keep-plan CSV/TXT with `start,end` rows | required |
+| `-o, --output` | Output MP4 | `<video>.cut.mp4` |
+| `--srt` | Source SRT to retime | none |
+| `--out-srt` | Retimed SRT path | `<output>.srt` when `--srt` is set |
+| `--copy` | Stream copy for speed; less frame-accurate around cuts | off |
+| `--crf` | x264 CRF when re-encoding | `18` |
+| `--preset` | x264 preset when re-encoding | `veryfast` |
+| `--dry-run` | Print ffmpeg commands only | off |
+| `--keep-temp` | Keep temporary segment files | off |
+
+#### `remove_ranges.py`
+
+```bash
+python3 remove_ranges.py VIDEO [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source video | required |
+| `-p, --plan` | Text/CSV file with ranges to remove | none |
+| `-r, --remove` | Range to remove; repeatable, e.g. `-r 00:01:00-00:01:20` | none |
+| `-o, --output` | Output MP4 | `<video>.clean.mp4` |
+| `--srt` | Source SRT to retime | none |
+| `--out-srt` | Retimed SRT path | `<output>.srt` when `--srt` is set |
+| `--write-keep-plan` | Write computed keep ranges as CSV | none |
+| `--copy` | Stream copy for speed; less frame-accurate around cuts | off |
+| `--crf` | x264 CRF when re-encoding | `18` |
+| `--preset` | x264 preset when re-encoding | `veryfast` |
+| `--dry-run` | Print ffmpeg commands only | off |
+| `--keep-temp` | Keep temporary segment files | off |
+
+#### `make_shorts.py`
+
+```bash
+python3 make_shorts.py VIDEO PLAN [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source long video | required |
+| `PLAN` | `output,start,end,title` Shorts plan | required |
+| `--out-dir` | Directory for generated shorts | `shorts_out` |
+| `--srt` | Source SRT to retime per short | none |
+| `--burn-srt` | Burn the retimed SRT into each short; requires `--srt` | off |
+| `--no-srt-output` | Do not write sidecar SRT files | off |
+| `--vertical` | `crop`, `blur`, `pad`, or `none` | `crop` |
+| `--target` | Output dimensions for vertical modes | `1080x1920` |
+| `--max-seconds` | Warn when a short exceeds this duration; `0` disables | `60` |
+| `--strict-duration` | Fail instead of warning when `--max-seconds` is exceeded | off |
+| `--crf` | x264 CRF for final shorts | `19` |
+| `--preset` | x264 preset | `veryfast` |
+| `--font-size` | Burned subtitle font size | auto |
+| `--margin-v` | Burned subtitle bottom margin | auto |
+| `--subtitle-line-chars` | Approximate characters per burned subtitle line | auto |
+| `--font-name` | Burned subtitle font | `Helvetica` |
+| `--dry-run` | Print ffmpeg commands only | off |
+| `--keep-temp` | Keep temporary timeline files | off |
+
+#### `srt_find.py`
+
+```bash
+python3 srt_find.py SRT [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `SRT` | Source SRT | required |
+| `-q, --query` | Text or regex to search | none |
+| `-c, --context` | Neighbor cues to show around matches | `0` |
+| `--all` | List all cues | default when `--query` is omitted |
+| `--ignore-case` | Case-insensitive search | on |
+
+#### `srt_slice.py`
+
+```bash
+python3 srt_slice.py SRT PLAN [OPTIONS]
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `SRT` | Source SRT | required |
+| `PLAN` | Keep-plan CSV/TXT with `start,end` rows | required |
+| `-o, --output` | Output SRT | `<source>.cut.srt` |
+
+#### `ffprobe_info.py`
+
+```bash
+python3 ffprobe_info.py VIDEO
+```
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Video file to inspect | required |
+
+#### `make_srt_only.py`
+
+Legacy local SRT-only wrapper. Prefer `generate_srt.py`.
+
+| Argument | Description | Default |
+| --- | --- | --- |
+| `VIDEO` | Source video | required |
+| `-o, --output` | Output SRT | `<video>.srt` |
+| `-m, --model` | faster-whisper model | `small` |
+| `-l, --language` | Force language code | auto-detect |
+
 ### Sample Files
 
 - `examples/clip_plan.csv`
