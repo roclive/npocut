@@ -69,6 +69,26 @@ npm run dev
 
 `generate_srt_openai.py` 使用标准库直接调用 OpenAI API，不需要安装 `openai` Python 包。
 
+## Agent Skills 安装
+
+如果你使用 Codex 或其他支持自定义 skill 的本地 coding agent，可以安装一个 `npocut` skill，让 agent 记住这个项目的视频剪辑流程。
+
+```bash
+mkdir -p ~/.codex/skills/npocut
+cat > ~/.codex/skills/npocut/SKILL.md <<'EOF'
+---
+name: npocut
+description: Use npocut to generate SRT files, edit subtitle timestamps, build cut plans, make one Short, and burn subtitles for local video editing.
+---
+
+Use the local npocut repository for video/subtitle work.
+Prefer the documented CLI commands and the Web UI from README.md.
+Generated videos, local SRT files, temporary plans, and large media outputs are local editing artifacts and should not be committed unless the user explicitly asks.
+EOF
+```
+
+安装后，重启 agent 会话，或者让 agent 重新加载 skills。这个 skill 不会安装 Python、Node.js、ffmpeg；这些依赖仍然需要按照上面的 Quick Start 单独安装。
+
 ## Web UI
 
 ```bash
@@ -81,7 +101,7 @@ Web UI 会把 plan 文件直接写到 Python 脚本所在目录：
 | UI 模式 | 功能 | 导出/保存文件 |
 | --- | --- | --- |
 | `Cut` | 手动打 IN/OUT，生成保留片段计划 | `clip_plan.csv` |
-| `Submod` | 直接编辑 SRT 的 start/end 和字幕正文；改 start 同步上一条 end，改 end 同步下一条 start；`Time Nav` 可切换 timestamp 点击跳转视频 | 当前加载的 `.srt` |
+| `Submod` | 直接编辑 SRT 的 start/end 和字幕正文；改 start 同步上一条 end，改 end 同步下一条 start；`Time Nav` 可切换 timestamp 点击跳转视频；编辑后会自动保存一个备份 SRT | 当前加载的 `.srt` / `<原文件名>.submod-backup.srt` |
 | `Shorts` | 在字幕行左侧点 `Add`，把字幕加入一个 short 的保留计划；导出时按选择逐行写入，不自动合并 timestamp | `shorts_plan.csv` |
 | `Adv Cut` | 在字幕行左侧点 `Del` 标记要删的字幕，再导出反转后的保留计划 | `cut_plan_new.csv` |
 | `SRT` | 生成 `python3 generate_srt.py ...` 命令 | 无 plan |
@@ -94,6 +114,8 @@ Web UI 会把 plan 文件直接写到 Python 脚本所在目录：
 | --- | --- |
 | `Copy` | 复制当前命令 |
 | `Terminal` | 先保存当前 plan，再在当前目录打开 macOS Terminal 并执行命令 |
+
+Submod 的自动备份会写到 Python 脚本所在目录，不覆盖原始 SRT。例如加载 `meeting_01.srt` 后，编辑时会自动生成 `meeting_01.submod-backup.srt`。
 
 ## 时间格式
 

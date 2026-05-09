@@ -2,6 +2,7 @@
   color-scheme: dark;
   --subtitle-panel-height: 1040px;
   --video-preview-height: 520px;
+  --video-aspect-ratio: 16 / 9;
   --bg: #10100f;
   --panel: #181816;
   --panel-2: #20201d;
@@ -255,9 +256,36 @@ h2 {
   position: relative;
   overflow: hidden;
   height: var(--video-preview-height);
+  aspect-ratio: var(--video-aspect-ratio);
   min-height: 320px;
+  max-height: 960px;
   background: #060606;
   border: 1px solid #272723;
+  touch-action: none;
+}
+
+.video-shell.resizing {
+  user-select: none;
+}
+
+.video-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  height: 14px;
+  cursor: ns-resize;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent) center /
+      148px 2px no-repeat;
+}
+
+.video-resize-handle:hover,
+.video-shell.resizing .video-resize-handle {
+  background:
+    linear-gradient(90deg, transparent, rgba(57, 214, 163, 0.72), transparent) center /
+      178px 2px no-repeat;
 }
 
 video {
@@ -317,19 +345,41 @@ video:not([src]) {
 
 .transport {
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .time-readout {
-  display: grid;
-  place-items: center;
+  width: 142px;
   min-width: 132px;
   height: 38px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #11110f;
   color: var(--accent);
+  padding: 0 10px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
+}
+
+.seek-step-group {
+  display: grid;
+  grid-template-columns: 38px 58px 38px;
+  gap: 5px;
+  align-items: center;
+}
+
+.seek-step-group button {
+  width: 38px;
+  padding: 0;
+  font-weight: 800;
+}
+
+.seek-step-input {
+  width: 58px;
+  min-width: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .mark-row {
@@ -359,7 +409,28 @@ body[data-mode="burnSrt"] .plan-actions {
 }
 
 body[data-mode="remove"] .plan-panel {
-  grid-template-rows: auto auto;
+  grid-template-rows: auto;
+  min-height: 0;
+}
+
+body[data-mode="remove"] .plan-header {
+  justify-content: flex-end;
+}
+
+body[data-mode="remove"] .plan-header > div:first-child,
+body[data-mode="remove"] .command-box {
+  display: none;
+}
+
+body[data-mode="remove"] .plan-actions button {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+body[data-mode="remove"] .plan-actions button:hover {
+  opacity: 1;
 }
 
 body:not([data-mode="shorts"]) .mark-row {
@@ -368,7 +439,7 @@ body:not([data-mode="shorts"]) .mark-row {
 
 .side-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   height: var(--subtitle-panel-height);
   padding: 12px;
@@ -796,12 +867,21 @@ tr.selected td {
 
   .transport {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: minmax(128px, 1.35fr) minmax(46px, 0.5fr) minmax(110px, 1fr) minmax(46px, 0.5fr);
   }
 
   .time-readout {
+    width: 100%;
     min-width: 0;
     font-size: 13px;
+  }
+
+  .seek-step-group {
+    grid-template-columns: 34px minmax(42px, 1fr) 34px;
+  }
+
+  .seek-step-group button {
+    width: 34px;
   }
 
   .empty-time {

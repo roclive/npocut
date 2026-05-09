@@ -2,12 +2,15 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
   video: $("video"),
+  videoShell: $("videoShell"),
+  videoResizeHandle: $("videoResizeHandle"),
   emptyVideo: $("emptyVideo"),
   videoInput: $("videoInput"),
   srtInput: $("srtInput"),
   planInput: $("planInput"),
   projectStatus: $("projectStatus"),
   timeReadout: $("timeReadout"),
+  seekStepInput: $("seekStepInput"),
   startInput: $("startInput"),
   endInput: $("endInput"),
   titleInput: $("titleInput"),
@@ -32,6 +35,7 @@ const state = {
   mode: localStorage.getItem("npocut.mode") || "clip",
   videoName: "",
   srtName: "",
+  srtBackupName: "",
   videoUrl: "",
   cues: [],
   originalCues: [],
@@ -39,20 +43,43 @@ const state = {
   submodTimeNav: localStorage.getItem("npocut.submodTimeNav") === "1",
   segments: JSON.parse(localStorage.getItem("npocut.segments") || "[]"),
   dragIndex: null,
+  srtBackupTimer: null,
 };
 
 const ADVANCED_CUT_MERGE_GAP_SECONDS = 0.5;
+const SRT_BACKUP_SAVE_DELAY_MS = 1200;
+const DEFAULT_SEEK_STEP_SECONDS = 5;
+const MIN_SEEK_STEP_SECONDS = 0.1;
+const MAX_SEEK_STEP_SECONDS = 600;
+const DEFAULT_VIDEO_HEIGHT = 520;
+const MIN_VIDEO_HEIGHT = 260;
+const MAX_VIDEO_HEIGHT = 960;
 const subtitleHeight = clamp(
   Number(localStorage.getItem("npocut.subtitleHeight") || 1040),
   360,
   1400,
 );
+const seekStepSeconds = clamp(
+  Number(localStorage.getItem("npocut.seekStepSeconds")) || DEFAULT_SEEK_STEP_SECONDS,
+  MIN_SEEK_STEP_SECONDS,
+  MAX_SEEK_STEP_SECONDS,
+);
+const savedVideoPreviewHeight = localStorage.getItem("npocut.videoPreviewHeight");
+const videoPreviewHeight = savedVideoPreviewHeight
+  ? clamp(Number(savedVideoPreviewHeight) || DEFAULT_VIDEO_HEIGHT, MIN_VIDEO_HEIGHT, MAX_VIDEO_HEIGHT)
+  : null;
 
 function setSubtitleHeight(height) {
   const value = clamp(Number(height) || 1040, 360, 1400);
   document.documentElement.style.setProperty("--subtitle-panel-height", `${value}px`);
   els.subtitleHeight.value = String(value);
   localStorage.setItem("npocut.subtitleHeight", String(value));
+}
+
+function setVideoPreviewHeight(height) {
+  const value = clamp(Number(height) || DEFAULT_VIDEO_HEIGHT, MIN_VIDEO_HEIGHT, MAX_VIDEO_HEIGHT);
+  document.documentElement.style.setProperty("--video-preview-height", `${value}px`);
+  localStorage.setItem("npocut.videoPreviewHeight", String(Math.round(value)));
 }
 
 const modeMeta = {
@@ -135,6 +162,106 @@ function parseTime(value) {
   return NaN;
 }
 
+function formatPlainNumber(value) {
+  const rounded = Math.round(Number(value) * 1000) / 1000;
+  return String(rounded).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+}
+
+function setSeekStepSeconds(value) {
+  const seconds = Number(String(value || "").trim().replace(",", "."));
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    els.seekStepInput.classList.add("invalid");
+    setStatus("Invalid seek step");
+    return false;
+  }
+
+  const clamped = clamp(seconds, MIN_SEEK_STEP_SECONDS, MAX_SEEK_STEP_SECONDS);
+  els.seekStepInput.classList.remove("invalid");
+  els.seekStepInput.value = formatPlainNumber(clamped);
+  localStorage.setItem("npocut.seekStepSeconds", String(clamped));
+  return true;
+}
+
+function currentSeekStepSeconds() {
+  const seconds = Number(String(els.seekStepInput.value || "").trim().replace(",", "."));
+  if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_SEEK_STEP_SECONDS;
+  return clamp(seconds, MIN_SEEK_STEP_SECONDS, MAX_SEEK_STEP_SECONDS);
+}
+
+function savedSeekStepSeconds() {
+  return clamp(
+    Number(localStorage.getItem("npocut.seekStepSeconds")) || DEFAULT_SEEK_STEP_SECONDS,
+    MIN_SEEK_STEP_SECONDS,
+    MAX_SEEK_STEP_SECONDS,
+  );
+}
+
+function updateTimeReadout(seconds, force = false) {
+  if (!force && document.activeElement === els.timeReadout) return;
+  els.timeReadout.value = formatTime(seconds);
+  els.timeReadout.classList.remove("invalid");
+}
+
+function commitTimeReadout() {
+  const seconds = parseTime(els.timeReadout.value);
+  if (!Number.isFinite(seconds)) {
+    els.timeReadout.classList.add("invalid");
+    setStatus("Invalid timestamp");
+    return false;
+  }
+  els.timeReadout.classList.remove("invalid");
+  seekTo(seconds);
+  return true;
+}
+
+function isInteractiveTypingTarget(target) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest("input, textarea, select, button, [contenteditable='true']"));
+}
+
+async function toggleVideoPlayback() {
+  if (!els.video.src) return;
+  if (els.video.paused || els.video.ended) {
+    try {
+      await els.video.play();
+    } catch (error) {
+      setStatus(error.message || "Video playback failed");
+    }
+    return;
+  }
+  els.video.pause();
+}
+
+function handleGlobalKeydown(event) {
+  if (event.code !== "Space" || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (isInteractiveTypingTarget(event.target)) return;
+  event.preventDefault();
+  toggleVideoPlayback();
+}
+
+function startVideoResize(event) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  const startY = event.clientY;
+  const startHeight = els.videoShell.getBoundingClientRect().height;
+  els.videoShell.classList.add("resizing");
+  els.videoResizeHandle.setPointerCapture(event.pointerId);
+
+  const onPointerMove = (moveEvent) => {
+    setVideoPreviewHeight(startHeight + moveEvent.clientY - startY);
+  };
+  const onPointerUp = () => {
+    els.videoShell.classList.remove("resizing");
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+  };
+
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
+}
+
 function escapeCsv(value) {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
@@ -152,6 +279,10 @@ function escapeHtml(value) {
 
 function stem(name) {
   return name.replace(/\.[^.]+$/, "");
+}
+
+function srtBackupName(name) {
+  return `${stem(name || "subtitles")}.submod-backup.srt`;
 }
 
 function cleanOutputName(value, fallback) {
@@ -196,12 +327,13 @@ function currentTime() {
 function seekBy(delta) {
   if (!els.video.duration) return;
   els.video.currentTime = clamp(els.video.currentTime + delta, 0, els.video.duration);
+  updateTimeReadout(els.video.currentTime, true);
 }
 
 function seekTo(seconds) {
   if (!els.video.duration) return;
   els.video.currentTime = clamp(seconds, 0, els.video.duration);
-  els.timeReadout.textContent = formatTime(els.video.currentTime);
+  updateTimeReadout(els.video.currentTime, true);
 }
 
 function loadVideo(file) {
@@ -241,11 +373,16 @@ function parseSrt(text) {
 }
 
 async function loadSrt(file) {
+  if (state.srtBackupTimer) {
+    clearTimeout(state.srtBackupTimer);
+    state.srtBackupTimer = null;
+  }
   state.srtName = file.name;
+  state.srtBackupName = srtBackupName(file.name);
   state.cues = parseSrt(await fileText(file));
   state.originalCues = cloneCues(state.cues);
   state.advancedCutMarks.clear();
-  setStatus(`${state.videoName || "No video"} / ${file.name} / ${state.cues.length} cues`);
+  setStatus(`${state.videoName || "No video"} / ${file.name} / ${state.cues.length} cues / backup: ${state.srtBackupName}`);
   render();
 }
 
@@ -503,6 +640,40 @@ async function saveSrtEdits() {
   }
 }
 
+async function saveSrtBackup() {
+  if (!state.srtName || !state.srtBackupName) return;
+  const validationError = validateCues();
+  if (validationError) {
+    setStatus(`${validationError}; backup not saved`);
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/save-srt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: state.srtBackupName, content: buildSrtText() }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "SRT backup save failed");
+    setStatus(`Auto-saved backup SRT: ${result.filename}`);
+  } catch (error) {
+    setStatus(error.message || "SRT backup save failed");
+  }
+}
+
+function scheduleSrtBackupSave() {
+  if (!state.srtName || state.mode !== "remove") return;
+  if (state.srtBackupTimer) {
+    clearTimeout(state.srtBackupTimer);
+  }
+  setStatus(`Unsaved SRT edits: ${state.srtName} / backup pending: ${state.srtBackupName}`);
+  state.srtBackupTimer = window.setTimeout(() => {
+    state.srtBackupTimer = null;
+    saveSrtBackup();
+  }, SRT_BACKUP_SAVE_DELAY_MS);
+}
+
 function updateCueTime(cue, field, value, input) {
   const seconds = parseTime(value);
   if (!Number.isFinite(seconds)) {
@@ -518,13 +689,13 @@ function updateCueTime(cue, field, value, input) {
     return;
   }
   syncAdjacentCueBoundary(cue, field, seconds);
-  setStatus(`Unsaved SRT edits: ${state.srtName}`);
+  scheduleSrtBackupSave();
   renderCommand();
 }
 
 function updateCueText(cue, value) {
   cue.text = value;
-  setStatus(`Unsaved SRT edits: ${state.srtName}`);
+  scheduleSrtBackupSave();
 }
 
 function toggleSubmodTimeNav() {
@@ -950,7 +1121,7 @@ function renderCues() {
         : state.mode === "shorts"
           ? ` / ${state.segments.length} kept`
         : state.mode === "remove"
-          ? " / editable"
+          ? ` / editable / backup: ${state.srtBackupName}`
           : "";
     setStatus(`${state.videoName || "No video"} / ${state.srtName} / ${visible} cues${marks}`);
   }
@@ -976,7 +1147,9 @@ function render() {
     state.mode === "advancedCut"
       ? `${modeMeta[state.mode].file} / ${state.advancedCutMarks.size} marked / ${activeSegments.length} keep`
       : state.mode === "remove"
-        ? state.srtName || "Load SRT"
+        ? state.srtName
+          ? `${state.srtName} / backup: ${state.srtBackupName}`
+          : "Load SRT"
       : modeMeta[state.mode].file || modeMeta[state.mode].script;
   els.exportPlan.textContent =
     state.mode === "advancedCut" ? "Export Cut Plan" : state.mode === "remove" ? "Save SRT" : "Export";
@@ -1011,17 +1184,54 @@ els.planInput.addEventListener("change", async (event) => {
 });
 
 els.video.addEventListener("timeupdate", () => {
-  els.timeReadout.textContent = formatTime(currentTime());
+  updateTimeReadout(currentTime());
 });
 
 els.video.addEventListener("loadedmetadata", () => {
-  els.timeReadout.textContent = formatTime(0);
+  if (els.video.videoWidth && els.video.videoHeight) {
+    document.documentElement.style.setProperty(
+      "--video-aspect-ratio",
+      `${els.video.videoWidth} / ${els.video.videoHeight}`,
+    );
+  }
+  updateTimeReadout(0, true);
 });
 
-$("back5").addEventListener("click", () => seekBy(-5));
+$("back5").addEventListener("click", () => seekBy(-currentSeekStepSeconds()));
 $("back1").addEventListener("click", () => seekBy(-1));
 $("forward1").addEventListener("click", () => seekBy(1));
-$("forward5").addEventListener("click", () => seekBy(5));
+$("forward5").addEventListener("click", () => seekBy(currentSeekStepSeconds()));
+
+els.seekStepInput.addEventListener("blur", (event) => {
+  if (!setSeekStepSeconds(event.target.value)) {
+    event.target.value = formatPlainNumber(savedSeekStepSeconds());
+  }
+});
+
+els.seekStepInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    setSeekStepSeconds(event.target.value);
+    event.target.blur();
+  } else if (event.key === "Escape") {
+    event.target.value = formatPlainNumber(savedSeekStepSeconds());
+    event.target.classList.remove("invalid");
+    event.target.blur();
+  }
+});
+
+els.timeReadout.addEventListener("blur", () => {
+  if (!commitTimeReadout()) updateTimeReadout(currentTime(), true);
+});
+
+els.timeReadout.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    commitTimeReadout();
+    event.target.blur();
+  } else if (event.key === "Escape") {
+    updateTimeReadout(currentTime(), true);
+    event.target.blur();
+  }
+});
 
 $("setIn").addEventListener("click", () => {
   els.startInput.value = formatTime(currentTime());
@@ -1043,6 +1253,7 @@ els.clearPlan.addEventListener("click", () => {
     state.advancedCutMarks.clear();
   } else if (state.mode === "remove") {
     state.cues = cloneCues(state.originalCues);
+    scheduleSrtBackupSave();
   } else {
     state.segments = [];
   }
@@ -1058,6 +1269,11 @@ $("copyCommand").addEventListener("click", async () => {
 });
 
 els.runCommand.addEventListener("click", runCommandInTerminal);
+document.addEventListener("keydown", handleGlobalKeydown);
+els.videoResizeHandle.addEventListener("pointerdown", startVideoResize);
 
 setSubtitleHeight(subtitleHeight);
+setSeekStepSeconds(seekStepSeconds);
+if (videoPreviewHeight) setVideoPreviewHeight(videoPreviewHeight);
+updateTimeReadout(currentTime(), true);
 updateMode(state.mode);

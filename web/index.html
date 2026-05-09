@@ -34,20 +34,44 @@
 
       <section class="workspace">
         <section class="media-panel">
-          <div class="video-shell">
+          <div id="videoShell" class="video-shell">
             <video id="video" controls playsinline></video>
             <div id="emptyVideo" class="empty-video">
               <div class="empty-time">00:00.000</div>
               <div class="empty-line"></div>
             </div>
+            <div
+              id="videoResizeHandle"
+              class="video-resize-handle"
+              role="separator"
+              aria-orientation="horizontal"
+              title="Resize video"
+            ></div>
           </div>
 
           <div class="transport">
-            <button id="back5" title="Back 5 seconds" aria-label="Back 5 seconds">-5</button>
+            <div class="seek-step-group">
+              <button id="back5" title="Back by step seconds" aria-label="Back by step seconds">-</button>
+              <input
+                id="seekStepInput"
+                class="seek-step-input"
+                inputmode="decimal"
+                value="5"
+                aria-label="Step seconds"
+                title="Step seconds"
+              />
+              <button id="forward5" title="Forward by step seconds" aria-label="Forward by step seconds">+</button>
+            </div>
             <button id="back1" title="Back 1 second" aria-label="Back 1 second">-1</button>
-            <div class="time-readout" id="timeReadout">00:00.000</div>
+            <input
+              id="timeReadout"
+              class="time-readout"
+              inputmode="decimal"
+              value="00:00.000"
+              aria-label="Current timestamp"
+              title="Type a timestamp and press Enter"
+            />
             <button id="forward1" title="Forward 1 second" aria-label="Forward 1 second">+1</button>
-            <button id="forward5" title="Forward 5 seconds" aria-label="Forward 5 seconds">+5</button>
           </div>
 
           <div class="mark-row">
@@ -72,17 +96,6 @@
             <button class="mode-tab" data-mode="burnVerticalSrt">Burn 9:16</button>
           </div>
 
-          <div class="metric-strip">
-            <div>
-              <span>Rows</span>
-              <strong id="rowCount">0</strong>
-            </div>
-            <div>
-              <span>Total</span>
-              <strong id="totalDuration">00:00.000</strong>
-            </div>
-          </div>
-
           <div class="subtitle-search">
             <div class="subtitle-tools">
               <input id="srtQuery" placeholder="Search subtitles" />
@@ -93,6 +106,17 @@
               </label>
             </div>
             <div id="cueList" class="cue-list"></div>
+          </div>
+
+          <div class="metric-strip">
+            <div>
+              <span>Rows</span>
+              <strong id="rowCount">0</strong>
+            </div>
+            <div>
+              <span>Total</span>
+              <strong id="totalDuration">00:00.000</strong>
+            </div>
           </div>
         </aside>
       </section>

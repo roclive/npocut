@@ -1,5 +1,196 @@
 # npocut - timestamp based CLI 剪辑工具
 
+## English Version
+
+`npocut` is a timestamp-first video editing toolkit for long YouTube videos, single Shorts, subtitle generation, subtitle cleanup, subtitle burn-in, and SRT-based edit planning. It provides both practical Python CLI scripts and a local Web UI. Media files stay on your machine and are not uploaded.
+
+### macOS Quick Start
+
+Do not assume macOS already has a usable Python. Check first:
+
+```bash
+python3 --version
+```
+
+If `python3` is missing, install Homebrew first, then install Python, Node.js, and ffmpeg:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install python ffmpeg-full node
+```
+
+If Python is already installed, install only ffmpeg and Node.js:
+
+```bash
+brew install ffmpeg-full node
+```
+
+If only Node.js is missing:
+
+```bash
+brew install node
+node --version
+npm --version
+```
+
+You can also install Node.js from the official macOS installer at `https://nodejs.org/`. After installing, verify:
+
+```bash
+node --version
+npm --version
+```
+
+Clone the repository and install Python dependencies:
+
+```bash
+git clone https://github.com/roclive/npocut.git
+cd npocut
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Start the Web UI:
+
+```bash
+npm run dev
+```
+
+Open the URL printed in the terminal, usually `http://localhost:5173/`. Load a video and an SRT file to use `Cut`, `Submod`, `Shorts`, `Adv Cut`, `SRT`, `Burn SRT`, and `Burn 9:16`.
+
+### Dependencies
+
+| Dependency | Purpose | Install |
+| --- | --- | --- |
+| Python 3.10+ | Run all `.py` scripts | `brew install python` |
+| ffmpeg / ffprobe | Cut, concatenate, transcode, and burn subtitles | `brew install ffmpeg-full` |
+| Node.js | Run the Web UI | `brew install node` |
+| faster-whisper | Local SRT generation | `pip install -r requirements.txt` |
+| OpenAI API key | Optional, for OpenAI transcription models | `export OPENAI_API_KEY="..."` |
+
+`generate_srt_openai.py` calls the OpenAI API directly with the Python standard library, so the `openai` Python package is not required.
+
+### Agent Skills
+
+If you use Codex or another local coding agent that supports custom skills, you can install an `npocut` skill so the agent remembers the project workflow.
+
+```bash
+mkdir -p ~/.codex/skills/npocut
+cat > ~/.codex/skills/npocut/SKILL.md <<'EOF'
+---
+name: npocut
+description: Use npocut to generate SRT files, edit subtitle timestamps, build cut plans, make one Short, and burn subtitles for local video editing.
+---
+
+Use the local npocut repository for video/subtitle work.
+Prefer the documented CLI commands and the Web UI from README.md.
+Generated videos, local SRT files, temporary plans, and large media outputs are local editing artifacts and should not be committed unless the user explicitly asks.
+EOF
+```
+
+After installing the skill, restart the agent session or ask the agent to reload skills. The skill does not install Python, Node.js, or ffmpeg; install those dependencies separately with the Quick Start above.
+
+### Web UI
+
+```bash
+cd npocut
+npm run dev
+```
+
+The Web UI saves plan files directly into the same directory as the Python scripts.
+
+| UI mode | Purpose | Output/saved file |
+| --- | --- | --- |
+| `Cut` | Mark IN/OUT ranges manually and export a keep plan | `clip_plan.csv` |
+| `Submod` | Edit SRT start/end timestamps and subtitle text. Changing a start syncs the previous end; changing an end syncs the next start. `Time Nav` turns timestamp clicks into video seeking. Edits also auto-save a backup SRT | loaded `.srt` / `<source>.submod-backup.srt` |
+| `Shorts` | Click `Add` on subtitle rows to keep them for one Short. Export writes selected ranges row by row with one output name | `shorts_plan.csv` |
+| `Adv Cut` | Click `Del` on subtitle rows to mark deletion ranges, then export the reversed keep plan | `cut_plan_new.csv` |
+| `SRT` | Generate a `python3 generate_srt.py ...` command | no plan |
+| `Burn SRT` | Generate a `python3 burn_existing_srt.py ...` command | no plan |
+| `Burn 9:16` | Generate a `python3 burn_vertical_srt.py ...` command for vertical subtitle burn-in | no plan |
+
+Bottom command buttons:
+
+| Button | Action |
+| --- | --- |
+| `Copy` | Copy the current command |
+| `Terminal` | Save the current plan, open macOS Terminal in the current directory, and run the command |
+
+Submod auto-backups are written next to the Python scripts and do not overwrite the original SRT. Example: loading `meeting_01.srt` creates `meeting_01.submod-backup.srt` while editing.
+
+### Timestamp Format
+
+These formats are supported:
+
+```text
+75.5
+01:15.500
+00:01:15.500
+00:01:15,500
+```
+
+### Common Workflows
+
+#### Long YouTube Video
+
+```bash
+python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
+npm run dev
+# Export a plan from Cut or Adv Cut in the UI
+python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"
+python3 burn_existing_srt.py "long.cut.mp4" "long.cut.srt" -o "long.final.mp4"
+```
+
+#### Create One YouTube Short
+
+The `Shorts` UI mode is designed to create one Short at a time. Click `Add/Keep` on multiple subtitle rows, export `shorts_plan.csv`, and all selected ranges will be written with the same output name. Unselected time is skipped when the Short is generated.
+
+```bash
+python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"
+npm run dev
+# Switch to Shorts, click Add on subtitle rows, then export shorts_plan.csv
+python3 make_shorts.py "long.mp4" shorts_plan.csv \
+  --srt "long.srt" \
+  --burn-srt \
+  --out-dir shorts_out \
+  --vertical blur
+```
+
+Example `shorts_plan.csv`:
+
+```csv
+output,start,end,title
+short_01.mp4,00:01:10.000,00:01:58.000,hook
+short_01.mp4,00:03:20.000,00:03:42.000,follow up
+```
+
+Rows with the same `output` are concatenated into one Short.
+
+### Command Overview
+
+| Script | Purpose | Common command |
+| --- | --- | --- |
+| `generate_srt.py` | Generate local SRT with faster-whisper | `python3 generate_srt.py "long.mp4" -m medium -l zh -o "long.srt"` |
+| `generate_srt_openai.py` | Generate SRT with OpenAI transcription API | `python3 generate_srt_openai.py "long.mp4" -l zh -o "long.srt"` |
+| `burn_subs.py` | Generate/check SRT, then burn subtitles | `python3 burn_subs.py "long.mp4"` |
+| `burn_existing_srt.py` | Burn an existing SRT into a video | `python3 burn_existing_srt.py "long.mp4" "long.srt" -o "long.subbed.mp4"` |
+| `burn_vertical_srt.py` | Burn an existing SRT into a 9:16 vertical video | `python3 burn_vertical_srt.py "long.mp4" "long.srt" -o "long.vertical.subbed.mp4"` |
+| `srt_find.py` | Search SRT text to find edit points | `python3 srt_find.py "long.srt" -q "keyword" -c 2` |
+| `cut_plan.py` | Cut/reorder keep ranges and retime SRT | `python3 cut_plan.py "long.mp4" clip_plan.csv -o "long.cut.mp4" --srt "long.srt"` |
+| `remove_ranges.py` | Remove ranges and concatenate the remaining video | `python3 remove_ranges.py "long.mp4" --plan remove_ranges.txt -o "long.clean.mp4" --srt "long.srt"` |
+| `srt_slice.py` | Retiming-only SRT generation from a keep plan | `python3 srt_slice.py "long.srt" clip_plan.csv -o "long.cut.srt"` |
+| `make_shorts.py` | Generate one subtitle-aware vertical Short | `python3 make_shorts.py "long.mp4" shorts_plan.csv --srt "long.srt" --burn-srt --vertical blur` |
+| `ffprobe_info.py` | Show video duration, codec, resolution, and streams | `python3 ffprobe_info.py "long.mp4"` |
+
+### Sample Files
+
+- `examples/clip_plan.csv`
+- `examples/remove_ranges.txt`
+- `examples/shorts_plan.csv`
+
+---
+
 ## 日本語版
 
 `npocut` は、コマンドラインと timestamp を中心にした動画編集ツールセットです。YouTube 長尺動画、単一 Shorts、字幕生成、字幕微修正、字幕焼き込み、SRT からの編集点検索に使えます。Web UI はローカルブラウザで動作し、動画はアップロードされません。
@@ -71,6 +262,26 @@ npm run dev
 
 `generate_srt_openai.py` は Python 標準ライブラリで OpenAI API を直接呼び出すため、`openai` Python パッケージは不要です。
 
+### Agent Skills
+
+Codex など、カスタム skill に対応したローカル coding agent を使う場合は、`npocut` 用 skill を追加しておくと、agent が動画編集フローを思い出しやすくなります。
+
+```bash
+mkdir -p ~/.codex/skills/npocut
+cat > ~/.codex/skills/npocut/SKILL.md <<'EOF'
+---
+name: npocut
+description: Use npocut to generate SRT files, edit subtitle timestamps, build cut plans, make one Short, and burn subtitles for local video editing.
+---
+
+Use the local npocut repository for video/subtitle work.
+Prefer the documented CLI commands and the Web UI from README.md.
+Generated videos, local SRT files, temporary plans, and large media outputs are local editing artifacts and should not be committed unless the user explicitly asks.
+EOF
+```
+
+インストール後は、agent のセッションを再起動するか、skill を再読み込みしてください。この skill は Python、Node.js、ffmpeg をインストールしません。依存関係は上の Quick Start に従って別途インストールします。
+
 ### Web UI
 
 ```bash
@@ -83,7 +294,7 @@ Web UI は plan ファイルを Python スクリプトがあるディレクト�
 | UI モード | 機能 | 出力/保存ファイル |
 | --- | --- | --- |
 | `Cut` | 手動で IN/OUT を打ち、残す範囲の plan を作成 | `clip_plan.csv` |
-| `Submod` | SRT の start/end と本文を直接編集。start を変更すると前の字幕の end、end を変更すると次の字幕の start が同期されます。`Time Nav` で timestamp クリックによる動画ジャンプに切り替え | 読み込んだ `.srt` |
+| `Submod` | SRT の start/end と本文を直接編集。start を変更すると前の字幕の end、end を変更すると次の字幕の start が同期されます。`Time Nav` で timestamp クリックによる動画ジャンプに切り替え。編集後は自動でバックアップ SRT も保存されます | 読み込んだ `.srt` / `<元ファイル名>.submod-backup.srt` |
 | `Shorts` | 字幕行左の `Add` で、単一 short に残す範囲へ追加。export 時は選択した timestamp を行ごとに出力し、自動結合しません | `shorts_plan.csv` |
 | `Adv Cut` | 字幕行左の `Del` で削除対象をマークし、反転した keep plan を出力 | `cut_plan_new.csv` |
 | `SRT` | `python3 generate_srt.py ...` コマンドを生成 | plan なし |
@@ -96,6 +307,8 @@ Web UI は plan ファイルを Python スクリプトがあるディレクト�
 | --- | --- |
 | `Copy` | 現在のコマンドをコピー |
 | `Terminal` | 現在の plan を保存してから、macOS Terminal を現在のディレクトリで開き、コマンドを実行 |
+
+Submod の自動バックアップは Python スクリプトと同じディレクトリに保存され、元の SRT は上書きしません。例: `meeting_01.srt` を読み込むと、編集中に `meeting_01.submod-backup.srt` が作られます。
 
 ### Timestamp 形式
 
@@ -442,6 +655,26 @@ npm run dev
 
 `generate_srt_openai.py` 使用标准库直接调用 OpenAI API，不需要安装 `openai` Python 包。
 
+## Agent Skills 安装
+
+如果你使用 Codex 或其他支持自定义 skill 的本地 coding agent，可以安装一个 `npocut` skill，让 agent 记住这个项目的视频剪辑流程。
+
+```bash
+mkdir -p ~/.codex/skills/npocut
+cat > ~/.codex/skills/npocut/SKILL.md <<'EOF'
+---
+name: npocut
+description: Use npocut to generate SRT files, edit subtitle timestamps, build cut plans, make one Short, and burn subtitles for local video editing.
+---
+
+Use the local npocut repository for video/subtitle work.
+Prefer the documented CLI commands and the Web UI from README.md.
+Generated videos, local SRT files, temporary plans, and large media outputs are local editing artifacts and should not be committed unless the user explicitly asks.
+EOF
+```
+
+安装后，重启 agent 会话，或者让 agent 重新加载 skills。这个 skill 不会安装 Python、Node.js、ffmpeg；这些依赖仍然需要按照上面的 Quick Start 单独安装。
+
 ## Web UI
 
 ```bash
@@ -454,7 +687,7 @@ Web UI 会把 plan 文件直接写到 Python 脚本所在目录：
 | UI 模式 | 功能 | 导出/保存文件 |
 | --- | --- | --- |
 | `Cut` | 手动打 IN/OUT，生成保留片段计划 | `clip_plan.csv` |
-| `Submod` | 直接编辑 SRT 的 start/end 和字幕正文；改 start 同步上一条 end，改 end 同步下一条 start；`Time Nav` 可切换 timestamp 点击跳转视频 | 当前加载的 `.srt` |
+| `Submod` | 直接编辑 SRT 的 start/end 和字幕正文；改 start 同步上一条 end，改 end 同步下一条 start；`Time Nav` 可切换 timestamp 点击跳转视频；编辑后会自动保存一个备份 SRT | 当前加载的 `.srt` / `<原文件名>.submod-backup.srt` |
 | `Shorts` | 在字幕行左侧点 `Add`，把字幕加入一个 short 的保留计划；导出时按选择逐行写入，不自动合并 timestamp | `shorts_plan.csv` |
 | `Adv Cut` | 在字幕行左侧点 `Del` 标记要删的字幕，再导出反转后的保留计划 | `cut_plan_new.csv` |
 | `SRT` | 生成 `python3 generate_srt.py ...` 命令 | 无 plan |
@@ -467,6 +700,8 @@ Web UI 会把 plan 文件直接写到 Python 脚本所在目录：
 | --- | --- |
 | `Copy` | 复制当前命令 |
 | `Terminal` | 先保存当前 plan，再在当前目录打开 macOS Terminal 并执行命令 |
+
+Submod 的自动备份会写到 Python 脚本所在目录，不覆盖原始 SRT。例如加载 `meeting_01.srt` 后，编辑时会自动生成 `meeting_01.submod-backup.srt`。
 
 ## 时间格式
 
