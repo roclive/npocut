@@ -1,12 +1,13 @@
 ---
 name: "npocut-video-workflows"
-description: "Use for npocut video editing tasks: Web UI usage, generating SRT files, burning subtitles, cutting by timestamp plans, removing ranges, making one Short, retiming SRTs, searching SRT cues, vertical 9:16 subtitle burns, and choosing/running the project's Python video tools without committing local media artifacts."
+description: "Use for npocut video editing tasks: Web UI usage, generating SRT files, burning subtitles, cutting by timestamp plans, removing ranges, making one Short, merging two independent animation/video files, retiming SRTs, searching SRT cues, vertical 9:16 subtitle burns, and choosing/running the project's Python video tools without committing local media artifacts."
 ---
 
 # npocut Video Workflows
 
 Use this skill when the task mentions npocut, SRT generation, subtitle burning,
-timestamp cuts, Submod, Shorts, cut plans, or the ytsubone video scripts.
+timestamp cuts, Submod, Shorts, cut plans, merging animations, or the ytsubone
+video scripts.
 
 ## Project Paths
 
@@ -136,6 +137,13 @@ Make one Short from `shorts_plan.csv`:
 
 ```bash
 python3 make_shorts.py "input.mp4" shorts_plan.csv --out-dir shorts_out --srt "input.srt" --burn-srt --vertical blur
+```
+
+Merge two independent animation/video files into one longer animation:
+
+```bash
+python3 merge_animations.py "first.mp4" "second.mp4" -o "combined.mp4"
+python3 merge_animations.py "first.gif" "second.gif" -o "combined.gif" --fps 24
 ```
 
 Search/list SRT cues for cut points:
@@ -292,6 +300,24 @@ python3 ffprobe_info.py "input.mp4"
 - `--font-name`: burned subtitle font; default `Helvetica`.
 - `--dry-run`: print ffmpeg commands only.
 - `--keep-temp`: keep temporary timeline files.
+
+### `merge_animations.py`
+
+`python3 merge_animations.py FIRST SECOND [OPTIONS]`
+
+- `FIRST`: first independent animation/video file.
+- `SECOND`: second independent animation/video file appended after the first.
+- `-o, --output`: output file; default `<first>.merged.mp4`.
+- `--target`: output dimensions such as `1920x1080`; default uses the first
+  input's dimensions.
+- `--fps`: output frame rate; default uses the first input's frame rate.
+- `--fit`: how to fit mismatched aspect ratios: `contain`, `crop`, or
+  `stretch`; default `contain`.
+- `--background`: pad color for `--fit contain`; default `black`.
+- `--crf`: x264 CRF for MP4/MOV output; default `18`.
+- `--preset`: x264 preset for MP4/MOV output; default `veryfast`.
+- `--gif-loop`: GIF loop count; `0` means loop forever.
+- `--dry-run`: print ffmpeg command only.
 
 ### `srt_find.py`
 
