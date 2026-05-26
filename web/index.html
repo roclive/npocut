@@ -3,6 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: file:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
     <title>npocut</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -154,6 +158,17 @@
           <code id="commandText">Load media and add rows to generate a command.</code>
           <button id="copyCommand" class="secondary">Copy</button>
           <button id="runCommand" class="primary">Terminal</button>
+        </div>
+
+        <div class="task-panel">
+          <div class="task-header">
+            <div class="task-state">
+              <span id="runtimeStatus">Runtime: Browser</span>
+              <span id="taskStatus">Idle</span>
+            </div>
+            <button id="cancelTask" class="secondary" type="button" disabled>Cancel</button>
+          </div>
+          <pre id="taskLog" class="task-log" aria-live="polite"></pre>
         </div>
       </section>
     </main>

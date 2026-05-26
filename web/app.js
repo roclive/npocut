@@ -28,14 +28,27 @@ const els = {
   clearPlan: $("clearPlan"),
   exportPlan: $("exportPlan"),
   commandText: $("commandText"),
+  copyCommand: $("copyCommand"),
   runCommand: $("runCommand"),
+  runtimeStatus: $("runtimeStatus"),
+  taskStatus: $("taskStatus"),
+  taskLog: $("taskLog"),
+  cancelTask: $("cancelTask"),
 };
 
 const state = {
   mode: localStorage.getItem("npocut.mode") || "clip",
   videoName: "",
+  videoPath: "",
+  videoFile: null,
   srtName: "",
+  srtPath: "",
+  srtFile: null,
   srtBackupName: "",
+  planName: "",
+  planPath: "",
+  planFile: null,
+  userDataPath: "",
   videoUrl: "",
   cues: [],
   originalCues: [],
@@ -44,6 +57,9 @@ const state = {
   segments: JSON.parse(localStorage.getItem("npocut.segments") || "[]"),
   dragIndex: null,
   srtBackupTimer: null,
+  taskRunning: false,
+  taskLogHasContent: false,
+  currentTaskId: null,
 };
 
 const ADVANCED_CUT_MERGE_GAP_SECONDS = 0.5;
@@ -294,6 +310,55 @@ function cleanOutputName(value, fallback) {
   return base.toLowerCase().endsWith(".mp4") ? base : `${base}.mp4`;
 }
 
+function electronBridge() {
+  return window.npocut || null;
+}
+
+function isElectronRuntime() {
+  return Boolean(electronBridge());
+}
+
+function isFileRuntime() {
+  return window.location.protocol === "file:";
+}
+
+function pathBasename(value) {
+  return String(value || "").split(/[\\/]/).filter(Boolean).pop() || "";
+}
+
+function pathDirname(value) {
+  const raw = String(value || "");
+  const index = Math.max(raw.lastIndexOf("/"), raw.lastIndexOf("\\"));
+  if (index < 0) return "";
+  if (index === 0 && raw.startsWith("/")) return "/";
+  return raw.slice(0, index);
+}
+
+function joinPath(base, ...parts) {
+  const rawBase = String(base || "");
+  if (!rawBase) return parts.filter(Boolean).join("/");
+  const sep = rawBase.includes("\\") && !rawBase.includes("/") ? "\\" : "/";
+  const cleanBase = rawBase === sep ? rawBase : rawBase.replace(/[\\/]+$/, "");
+  const cleanParts = parts
+    .filter(Boolean)
+    .map((part) => String(part).replace(/^[\\/]+|[\\/]+$/g, ""));
+  if (cleanBase === sep) return `${sep}${cleanParts.join(sep)}`;
+  return [cleanBase, ...cleanParts].join(sep);
+}
+
+function fileAbsolutePath(file) {
+  const value = file && typeof file.path === "string" ? file.path : "";
+  return value && /[\\/]/.test(value) ? value : "";
+}
+
+function loadedFileInfo(file) {
+  const filePath = fileAbsolutePath(file);
+  return {
+    name: pathBasename(filePath) || file?.name || "",
+    path: filePath,
+  };
+}
+
 function cloneCues(cues) {
   return cues.map((cue) => ({ ...cue }));
 }
@@ -305,6 +370,323 @@ function saveState() {
 
 function setStatus(text) {
   els.projectStatus.textContent = text;
+}
+
+function normalizeBridgeResult(result, fallback = {}) {
+  const normalized =
+    typeof result === "string"
+      ? { ok: true, path: result, filename: pathBasename(result) }
+      : { ok: true, ...fallback, ...(result || {}) };
+  if (normalized.ok === false) {
+    throw new Error(normalized.error || "Electron request failed");
+  }
+  return normalized;
+}
+
+async function callBridge(methodNames, payload, label) {
+  const api = electronBridge();
+  const names = Array.isArray(methodNames) ? methodNames : [methodNames];
+  const methodName = names.find((name) => typeof api?.[name] === "function");
+  if (!methodName) {
+    throw new Error(`Electron API unavailable: ${label || names[0]}`);
+  }
+  return await api[methodName](payload);
+}
+
+async function postJson(url, payload) {
+  if (isFileRuntime()) {
+    throw new Error("Electron preload bridge is unavailable; cannot use browser fetch from file://");
+  }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Request failed");
+  return result;
+}
+
+const appApi = {
+  async exportPlan(payload) {
+    if (isElectronRuntime()) {
+      const result = await callBridge(["exportPlan", "savePlan"], payload, "exportPlan");
+      return normalizeBridgeResult(result, { filename: payload.filename, path: payload.targetPath });
+    }
+    return await postJson("/api/export-plan", {
+      filename: payload.filename,
+      content: payload.content,
+    });
+  },
+
+  async saveSrt(payload) {
+    if (isElectronRuntime()) {
+      const result = await callBridge("saveSrt", payload, "saveSrt");
+      return normalizeBridgeResult(result, { filename: payload.filename, path: payload.targetPath });
+    }
+    return await postJson("/api/save-srt", {
+      filename: payload.filename,
+      content: payload.content,
+    });
+  },
+
+  async runBrowserCommand(payload) {
+    return await postJson("/api/run-command", payload);
+  },
+
+  async runTask(payload) {
+    const result = await callBridge("runTask", payload, "runTask");
+    return normalizeBridgeResult(result);
+  },
+
+  async cancelTask(payload) {
+    const result = await callBridge("cancelTask", payload, "cancelTask");
+    return normalizeBridgeResult(result);
+  },
+
+  async checkRuntime(payload = {}) {
+    const result = await callBridge("checkRuntime", payload, "checkRuntime");
+    return result || {};
+  },
+
+  async copyText(text) {
+    if (isElectronRuntime()) {
+      await callBridge("copyText", String(text), "copyText");
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+  },
+};
+
+function configuredUserDataPath() {
+  const api = electronBridge();
+  const value = api?.userDataPath || api?.paths?.userData;
+  return typeof value === "string" ? value : "";
+}
+
+async function ensureElectronUserDataPath() {
+  if (!isElectronRuntime()) return "";
+  if (state.userDataPath) return state.userDataPath;
+
+  const configured = configuredUserDataPath();
+  if (configured) {
+    state.userDataPath = configured;
+    return state.userDataPath;
+  }
+
+  const api = electronBridge();
+  if (typeof api?.getUserDataPath === "function") {
+    const result = await api.getUserDataPath();
+    state.userDataPath =
+      typeof result === "string"
+        ? result
+        : typeof result?.path === "string"
+          ? result.path
+          : "";
+  }
+
+  if (typeof api?.checkRuntime === "function") {
+    const result = await appApi.checkRuntime();
+    state.userDataPath = result.workDir || result.userDataPath || "";
+  }
+
+  return state.userDataPath;
+}
+
+async function electronBaseDir(preferredPath = "") {
+  const direct = pathDirname(preferredPath);
+  if (direct) return direct;
+
+  const loadedDir = pathDirname(state.videoPath) || pathDirname(state.srtPath);
+  if (loadedDir) return loadedDir;
+
+  const userDataPath = await ensureElectronUserDataPath();
+  if (userDataPath) return userDataPath;
+
+  throw new Error("Electron needs a loaded file path or userData path before saving");
+}
+
+async function savePayload(filename, content, preferredTargetPath = "") {
+  if (!isElectronRuntime()) return { filename, content };
+
+  const directBaseDir =
+    pathDirname(preferredTargetPath) || pathDirname(state.videoPath) || pathDirname(state.srtPath);
+  const baseFile = state.videoFile || state.srtFile || state.planFile || null;
+  const fallbackBaseDir = directBaseDir || (baseFile ? "" : await electronBaseDir(preferredTargetPath));
+  const payload = {
+    filename: pathBasename(filename) || filename,
+    content,
+    baseFile,
+    baseDir: fallbackBaseDir,
+  };
+  if (preferredTargetPath) {
+    payload.targetPath = preferredTargetPath;
+  } else if (fallbackBaseDir) {
+    payload.targetPath = joinPath(fallbackBaseDir, pathBasename(filename) || filename);
+  }
+  return payload;
+}
+
+function setTaskLogPlaceholder() {
+  if (!els.taskLog) return;
+  state.taskLogHasContent = false;
+  els.taskLog.textContent = "No task output yet.";
+}
+
+function appendTaskLog(text, stream = "info") {
+  if (!els.taskLog || text === undefined || text === null) return;
+  const body = String(text);
+  if (!body) return;
+  if (!state.taskLogHasContent) {
+    els.taskLog.textContent = "";
+    state.taskLogHasContent = true;
+  }
+  const prefix = stream === "stdout" || stream === "stderr" || stream === "exit" ? `[${stream}] ` : "";
+  const needsBreak = els.taskLog.textContent && !els.taskLog.textContent.endsWith("\n");
+  els.taskLog.textContent += `${needsBreak ? "\n" : ""}${prefix}${body}`;
+  if (!els.taskLog.textContent.endsWith("\n")) els.taskLog.textContent += "\n";
+  els.taskLog.scrollTop = els.taskLog.scrollHeight;
+}
+
+function setTaskStatus(text) {
+  els.taskStatus.textContent = text;
+}
+
+function updateRuntimeStatus() {
+  const runtime = isElectronRuntime() ? "Electron" : "Browser";
+  const suffix = isElectronRuntime() && state.userDataPath ? ` / ${state.userDataPath}` : "";
+  els.runtimeStatus.textContent = `Runtime: ${runtime}${suffix}`;
+  els.runCommand.textContent = isElectronRuntime() ? "Run" : "Terminal";
+}
+
+function updateTaskControls() {
+  els.cancelTask.disabled = !isElectronRuntime() || !state.taskRunning;
+}
+
+function setTaskRunning(running, statusText) {
+  state.taskRunning = running;
+  if (statusText) setTaskStatus(statusText);
+  updateTaskControls();
+}
+
+function taskEventKind(eventName, detail) {
+  if (eventName.includes("task-started")) return "status";
+  if (eventName.includes("task-error")) return "error";
+  if (eventName.includes("task-finished")) return "exit";
+  const stream = String(detail?.stream || "").toLowerCase();
+  if (stream === "stdout" || stream === "stderr" || stream === "exit" || stream === "status") {
+    return stream;
+  }
+  const type = String(detail?.type || detail?.kind || "").toLowerCase();
+  if (type) return type;
+  if (eventName.includes("stdout")) return "stdout";
+  if (eventName.includes("stderr")) return "stderr";
+  if (eventName.includes("exit")) return "exit";
+  if (eventName.includes("status")) return "status";
+  return "log";
+}
+
+function taskEventText(detail) {
+  if (typeof detail === "string") return detail;
+  return detail?.text ?? detail?.data ?? detail?.chunk ?? detail?.message ?? (typeof detail?.status === "string" ? detail.status : "");
+}
+
+function formatTaskCommand(detail) {
+  const executable = detail?.executable || "";
+  const args = Array.isArray(detail?.args) ? detail.args : [];
+  if (!executable && !args.length) return "";
+  return [executable, ...args]
+    .filter(Boolean)
+    .map((part) => {
+      const text = String(part);
+      return /\s/.test(text) ? `"${text.replaceAll('"', '\\"')}"` : text;
+    })
+    .join(" ");
+}
+
+function handleTaskEvent(event) {
+  const detail = event.detail || {};
+  const eventTaskId = detail.taskId ?? detail.id;
+  if (state.currentTaskId && eventTaskId && String(eventTaskId) !== String(state.currentTaskId)) return;
+
+  const kind = taskEventKind(event.type, detail);
+  if (kind === "exit") {
+    const code = detail.code ?? detail.exitCode ?? detail.status;
+    const signal = detail.signal ? ` signal ${detail.signal}` : "";
+    const cancelled = detail.cancelled ? " cancelled" : "";
+    appendTaskLog(`code ${code ?? "unknown"}${signal}${cancelled}`, "exit");
+    const completed = code === 0 && !detail.cancelled;
+    setTaskRunning(false, completed ? "Completed" : detail.cancelled ? "Cancelled" : "Exited");
+    state.currentTaskId = null;
+    setStatus(completed ? "Task completed" : detail.cancelled ? "Task cancelled" : `Task exited: ${code ?? "unknown"}`);
+    return;
+  }
+
+  if (kind === "error") {
+    const text = taskEventText(detail) || detail.error || "Task error";
+    appendTaskLog(text, "stderr");
+    setTaskRunning(false, "Failed");
+    setStatus(text);
+    return;
+  }
+
+  if (kind === "status") {
+    const text = taskEventText(detail) || (detail.script ? `Started ${detail.script}` : "");
+    if (text) setTaskStatus(text);
+    if (detail.taskId) {
+      state.currentTaskId = detail.taskId;
+      appendTaskLog(`task ${detail.taskId} started`);
+    }
+    if (detail.cwd) appendTaskLog(`cwd: ${detail.cwd}`);
+    const command = formatTaskCommand(detail);
+    if (command) appendTaskLog(`command: ${command}`);
+    if (detail.ffmpeg?.fallbackToPath) {
+      appendTaskLog("bundled ffmpeg is incomplete for this platform; falling back to PATH", "stderr");
+    }
+    return;
+  }
+
+  const stream = kind === "stderr" ? "stderr" : kind === "stdout" ? "stdout" : "info";
+  appendTaskLog(taskEventText(detail), stream);
+}
+
+function attachTaskEventListeners() {
+  [
+    "npocut:task",
+    "npocut:task-started",
+    "npocut:task-error",
+    "npocut:task-finished",
+    "npocut-task",
+    "npocut:task-log",
+    "npocut:task-output",
+    "npocut:task-stdout",
+    "npocut:task-stderr",
+    "npocut:task-exit",
+    "npocut:task-status",
+    "npocut:task:stdout",
+    "npocut:task:stderr",
+    "npocut:task:exit",
+    "npocut:task:status",
+    "npocut-task-log",
+    "npocut-task-output",
+    "npocut-task-stdout",
+    "npocut-task-stderr",
+    "npocut-task-exit",
+    "npocut-task-status",
+    "npocut:stdout",
+    "npocut:stderr",
+    "npocut:exit",
+  ].forEach((name) => window.addEventListener(name, handleTaskEvent));
+}
+
+async function initRuntime() {
+  try {
+    if (isElectronRuntime()) await ensureElectronUserDataPath();
+  } catch (error) {
+    setStatus(error.message || "Runtime init failed");
+  }
+  updateRuntimeStatus();
+  updateTaskControls();
 }
 
 function updateMode(mode) {
@@ -338,11 +720,14 @@ function seekTo(seconds) {
 
 function loadVideo(file) {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
-  state.videoName = file.name;
+  const info = loadedFileInfo(file);
+  state.videoName = info.name;
+  state.videoPath = info.path;
+  state.videoFile = file;
   state.videoUrl = URL.createObjectURL(file);
   els.video.src = state.videoUrl;
   els.emptyVideo.classList.add("hidden");
-  setStatus(`${file.name}`);
+  setStatus(`${state.videoName}${state.videoPath ? ` / ${pathDirname(state.videoPath)}` : ""}`);
   renderCommand();
 }
 
@@ -377,12 +762,15 @@ async function loadSrt(file) {
     clearTimeout(state.srtBackupTimer);
     state.srtBackupTimer = null;
   }
-  state.srtName = file.name;
-  state.srtBackupName = srtBackupName(file.name);
+  const info = loadedFileInfo(file);
+  state.srtName = info.name;
+  state.srtPath = info.path;
+  state.srtFile = file;
+  state.srtBackupName = srtBackupName(state.srtName);
   state.cues = parseSrt(await fileText(file));
   state.originalCues = cloneCues(state.cues);
   state.advancedCutMarks.clear();
-  setStatus(`${state.videoName || "No video"} / ${file.name} / ${state.cues.length} cues / backup: ${state.srtBackupName}`);
+  setStatus(`${state.videoName || "No video"} / ${state.srtName} / ${state.cues.length} cues / backup: ${state.srtBackupName}`);
   render();
 }
 
@@ -624,13 +1012,9 @@ async function saveSrtEdits() {
   }
 
   try {
-    const response = await fetch("/api/save-srt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: state.srtName, content: buildSrtText() }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "SRT save failed");
+    const payload = await savePayload(state.srtName, buildSrtText(), state.srtPath);
+    const result = await appApi.saveSrt(payload);
+    if (isElectronRuntime() && result.path) state.srtPath = result.path;
     state.originalCues = cloneCues(state.cues);
     const message = `SRT 已保存：${result.path}`;
     setStatus(message);
@@ -649,13 +1033,11 @@ async function saveSrtBackup() {
   }
 
   try {
-    const response = await fetch("/api/save-srt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: state.srtBackupName, content: buildSrtText() }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "SRT backup save failed");
+    const backupTargetPath = state.srtPath
+      ? joinPath(pathDirname(state.srtPath), state.srtBackupName)
+      : "";
+    const payload = await savePayload(state.srtBackupName, buildSrtText(), backupTargetPath);
+    const result = await appApi.saveSrt(payload);
     setStatus(`Auto-saved backup SRT: ${result.filename}`);
   } catch (error) {
     setStatus(error.message || "SRT backup save failed");
@@ -883,13 +1265,12 @@ async function exportPlan() {
   }
   const content = buildPlanText();
   try {
-    const response = await fetch("/api/export-plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename, content }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Export failed");
+    const payload = await savePayload(filename, content);
+    const result = await appApi.exportPlan(payload);
+    if (isElectronRuntime() && result.path) {
+      state.planName = filename;
+      state.planPath = result.path;
+    }
     if (state.mode === "advancedCut") {
       const keepCount = buildAdvancedKeepSegments().length;
       const message = `cut_plan_new.csv 已生成：${result.path} / 保留片段 ${keepCount} 行`;
@@ -921,35 +1302,113 @@ async function savePlanIfNeeded() {
     }
   }
 
-  const response = await fetch("/api/export-plan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename, content: buildPlanText() }),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Plan export failed");
+  const payload = await savePayload(filename, buildPlanText());
+  const result = await appApi.exportPlan(payload);
+  if (isElectronRuntime() && result.path) {
+    state.planName = filename;
+    state.planPath = result.path;
+  }
   return result.path;
+}
+
+function outputPathForMode(baseDir, videoBase) {
+  if (state.mode === "srt") return joinPath(baseDir, `${videoBase}.srt`);
+  if (state.mode === "burnSrt") return joinPath(baseDir, `${videoBase}.subbed.mp4`);
+  if (state.mode === "burnVerticalSrt") return joinPath(baseDir, `${videoBase}.vertical.subbed.mp4`);
+  if (state.mode === "shorts") return joinPath(baseDir, "shorts_out", currentShortsOutputName());
+  return joinPath(baseDir, `${videoBase}.cut.mp4`);
+}
+
+function srtPathForTask(baseDir, videoBase) {
+  if (state.mode === "srt") return "";
+  if (state.srtPath) return state.srtPath;
+  if (state.srtName) return joinPath(baseDir, state.srtName);
+  if (state.mode === "advancedCut" || state.mode === "burnSrt" || state.mode === "burnVerticalSrt") {
+    return joinPath(baseDir, `${videoBase}.srt`);
+  }
+  return "";
+}
+
+async function buildRunTaskPayload(planPath) {
+  if (!state.videoPath && !state.videoFile) {
+    throw new Error("Electron task needs a loaded video file");
+  }
+
+  const baseDir = state.videoPath ? await electronBaseDir(state.videoPath) : "";
+  const videoName = pathBasename(state.videoPath) || state.videoName || "input.mp4";
+  const videoBase = stem(videoName);
+  const srtPath = srtPathForTask(baseDir, videoBase);
+  const outputPath = outputPathForMode(baseDir, videoBase);
+  const options = {
+    baseDir,
+    planFilename: modeMeta[state.mode].file || "",
+    srtLoaded: Boolean(state.srtPath || state.srtName),
+  };
+
+  if (state.mode === "shorts") {
+    options.outDir = joinPath(baseDir, "shorts_out");
+    options.outputName = currentShortsOutputName();
+    options.burnSrt = Boolean(srtPath);
+  } else if (state.mode === "burnVerticalSrt") {
+    options.vertical = "crop";
+    options.target = "1080x1920";
+  }
+
+  return {
+    mode: state.mode,
+    videoPath: state.videoPath || videoName,
+    videoFile: state.videoFile,
+    srtPath,
+    srtFile: state.srtFile,
+    planPath: planPath || "",
+    outputPath,
+    baseDir,
+    baseFile: state.videoFile || state.srtFile || null,
+    planFilename: modeMeta[state.mode].file || "",
+    outDir: state.mode === "shorts" ? joinPath(baseDir, "shorts_out") : "",
+    burnSrt: state.mode === "shorts" ? Boolean(srtPath) : false,
+    vertical: state.mode === "burnVerticalSrt" ? "crop" : "",
+    target: state.mode === "burnVerticalSrt" ? "1080x1920" : "",
+    options,
+  };
 }
 
 async function runCommandInTerminal() {
   const command = els.commandText.textContent.trim();
-  if (!command.startsWith("python3 ")) {
-    setStatus("No runnable command");
-    return;
-  }
 
   try {
+    if (isElectronRuntime()) {
+      setTaskLogPlaceholder();
+      appendTaskLog(`Preparing ${modeMeta[state.mode]?.title || state.mode}`);
+      setTaskRunning(true, "Preparing");
+      const savedPath = await savePlanIfNeeded();
+      if (savedPath) appendTaskLog(`plan saved: ${savedPath}`);
+      const payload = await buildRunTaskPayload(savedPath);
+      appendTaskLog(`starting mode: ${payload.mode}`);
+      const result = await appApi.runTask(payload);
+      state.currentTaskId = result.taskId ?? result.id ?? null;
+      if (result.cwd) appendTaskLog(`cwd: ${result.cwd}`);
+      if (result.executable && Array.isArray(result.args)) {
+        appendTaskLog(`command: ${formatTaskCommand(result)}`);
+      }
+      const taskIdText = state.currentTaskId ? ` / task ${state.currentTaskId}` : "";
+      setTaskRunning(true, "Running");
+      setStatus(`Task started: ${payload.mode}${taskIdText}`);
+      return;
+    }
+
+    if (!command.startsWith("python3 ")) {
+      setStatus("No runnable command");
+      return;
+    }
+
     const savedPath = await savePlanIfNeeded();
-    const response = await fetch("/api/run-command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command, videoName: state.videoName }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Terminal launch failed");
+    const result = await appApi.runBrowserCommand({ command, videoName: state.videoName });
     const saved = savedPath ? ` / plan saved: ${savedPath}` : "";
     setStatus(`Terminal launched: ${result.cwd}${saved}`);
   } catch (error) {
+    setTaskRunning(false, "Idle");
+    appendTaskLog(error.message || "Task failed", "stderr");
     setStatus(error.message || "Terminal launch failed");
   }
 }
@@ -1180,7 +1639,13 @@ els.srtInput.addEventListener("change", async (event) => {
 
 els.planInput.addEventListener("change", async (event) => {
   const [file] = event.target.files || [];
-  if (file) importPlanText(await fileText(file));
+  if (file) {
+    const info = loadedFileInfo(file);
+    state.planName = info.name;
+    state.planPath = info.path;
+    state.planFile = file;
+    importPlanText(await fileText(file));
+  }
 });
 
 els.video.addEventListener("timeupdate", () => {
@@ -1263,17 +1728,34 @@ els.clearPlan.addEventListener("click", () => {
 
 els.exportPlan.addEventListener("click", exportPlan);
 
-$("copyCommand").addEventListener("click", async () => {
-  await navigator.clipboard.writeText(els.commandText.textContent);
-  setStatus("Command copied");
+els.copyCommand.addEventListener("click", async () => {
+  try {
+    await appApi.copyText(els.commandText.textContent);
+    setStatus("Command copied");
+  } catch (error) {
+    setStatus(error.message || "Copy failed");
+  }
 });
 
 els.runCommand.addEventListener("click", runCommandInTerminal);
+els.cancelTask.addEventListener("click", async () => {
+  if (!state.taskRunning) return;
+  try {
+    await appApi.cancelTask({ taskId: state.currentTaskId });
+    appendTaskLog("Cancel requested");
+    setTaskStatus("Cancelling");
+  } catch (error) {
+    setStatus(error.message || "Cancel failed");
+  }
+});
 document.addEventListener("keydown", handleGlobalKeydown);
 els.videoResizeHandle.addEventListener("pointerdown", startVideoResize);
 
+attachTaskEventListeners();
+setTaskLogPlaceholder();
 setSubtitleHeight(subtitleHeight);
 setSeekStepSeconds(seekStepSeconds);
 if (videoPreviewHeight) setVideoPreviewHeight(videoPreviewHeight);
 updateTimeReadout(currentTime(), true);
+initRuntime();
 updateMode(state.mode);

@@ -32,8 +32,12 @@ from typing import Any
 
 _FFMPEG_FULL = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"
 _FFPROBE_FULL = "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe"
-FFMPEG = _FFMPEG_FULL if os.path.exists(_FFMPEG_FULL) else "ffmpeg"
-FFPROBE = _FFPROBE_FULL if os.path.exists(_FFPROBE_FULL) else "ffprobe"
+FFMPEG = os.environ.get("NPOCUT_FFMPEG") or (
+    _FFMPEG_FULL if os.path.exists(_FFMPEG_FULL) else "ffmpeg"
+)
+FFPROBE = os.environ.get("NPOCUT_FFPROBE") or (
+    _FFPROBE_FULL if os.path.exists(_FFPROBE_FULL) else "ffprobe"
+)
 TRANSCRIPTION_URL = "https://api.openai.com/v1/audio/transcriptions"
 DEFAULT_OPENAI_MODEL = "gpt-4o-transcribe-diarize"
 OPENAI_MODELS = (

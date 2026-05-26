@@ -11,6 +11,8 @@ Steps:
     3. Burn the SRT into the video via ffmpeg subtitles filter -> single MP4
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import shutil
@@ -24,7 +26,9 @@ from faster_whisper import WhisperModel
 # Homebrew's slim `ffmpeg` lacks libass. Prefer `ffmpeg-full` if installed
 # (keg-only at /opt/homebrew/opt/ffmpeg-full/bin), else fall back to PATH.
 _FFMPEG_FULL = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"
-FFMPEG = _FFMPEG_FULL if os.path.exists(_FFMPEG_FULL) else "ffmpeg"
+FFMPEG = os.environ.get("NPOCUT_FFMPEG") or (
+    _FFMPEG_FULL if os.path.exists(_FFMPEG_FULL) else "ffmpeg"
+)
 
 
 def fmt_ts(seconds: float) -> str:
@@ -111,7 +115,7 @@ def burn_subs(video_path: Path, srt_path: Path, output_path: Path) -> None:
             "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,"
             "Alignment=2,MarginV=40"
         ).replace(",", r"\,")
-        vf = f"subtitles=subs.srt:force_style='{style}'"
+        vf = f"subtitles=filename=subs.srt:force_style={style}"
 
         cmd = [
             FFMPEG, "-y",

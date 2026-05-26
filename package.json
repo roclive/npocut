@@ -3,7 +3,186 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.mjs",
   "scripts": {
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "electron:dev": "electron .",
+    "stage:ffmpeg": "node scripts/stage-ffmpeg.mjs",
+    "prepack": "npm run stage:ffmpeg",
+    "pack": "electron-builder --dir",
+    "predist": "npm run stage:ffmpeg",
+    "dist": "electron-builder",
+    "predist:mac": "npm run stage:ffmpeg",
+    "dist:mac": "electron-builder --mac",
+    "predist:mac:arm64": "npm run stage:ffmpeg",
+    "dist:mac:arm64": "electron-builder --mac --arm64",
+    "predist:mac:x64": "npm run stage:ffmpeg",
+    "dist:mac:x64": "electron-builder --mac --x64",
+    "predist:win": "npm run stage:ffmpeg",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.npocut.app",
+    "productName": "npocut",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "package.json",
+      "server.js",
+      "web/**/*",
+      "electron/**/*",
+      "!package-lock.json",
+      "!**/*.mp4",
+      "!**/*.mov",
+      "!**/*.m4a",
+      "!**/*.wav",
+      "!**/*.aac",
+      "!**/*.srt",
+      "!**/*.ass",
+      "!**/clip_plan.csv",
+      "!**/cut_plan.csv",
+      "!**/cut_plan_new.csv",
+      "!**/remove_ranges.txt",
+      "!**/shorts_plan.csv",
+      "!**/keep_plan.csv",
+      "!**/shorts_out{,/**}",
+      "!**/*.openai_chunks{,/**}",
+      "!**/.venv{,/**}",
+      "!**/__pycache__{,/**}",
+      "!**/*.pyc",
+      "!**/.DS_Store"
+    ],
+    "extraResources": [
+      {
+        "from": "common.py",
+        "to": "npocut-cli/common.py"
+      },
+      {
+        "from": "burn_existing_srt.py",
+        "to": "npocut-cli/burn_existing_srt.py"
+      },
+      {
+        "from": "burn_subs.py",
+        "to": "npocut-cli/burn_subs.py"
+      },
+      {
+        "from": "burn_vertical_srt.py",
+        "to": "npocut-cli/burn_vertical_srt.py"
+      },
+      {
+        "from": "cut_plan.py",
+        "to": "npocut-cli/cut_plan.py"
+      },
+      {
+        "from": "ffprobe_info.py",
+        "to": "npocut-cli/ffprobe_info.py"
+      },
+      {
+        "from": "generate_srt.py",
+        "to": "npocut-cli/generate_srt.py"
+      },
+      {
+        "from": "generate_srt_openai.py",
+        "to": "npocut-cli/generate_srt_openai.py"
+      },
+      {
+        "from": "make_shorts.py",
+        "to": "npocut-cli/make_shorts.py"
+      },
+      {
+        "from": "make_srt_only.py",
+        "to": "npocut-cli/make_srt_only.py"
+      },
+      {
+        "from": "merge_animations.py",
+        "to": "npocut-cli/merge_animations.py"
+      },
+      {
+        "from": "remove_ranges.py",
+        "to": "npocut-cli/remove_ranges.py"
+      },
+      {
+        "from": "srt_find.py",
+        "to": "npocut-cli/srt_find.py"
+      },
+      {
+        "from": "srt_slice.py",
+        "to": "npocut-cli/srt_slice.py"
+      },
+      {
+        "from": "requirements.txt",
+        "to": "npocut-cli/requirements.txt"
+      },
+      {
+        "from": "README.md",
+        "to": "README.md"
+      },
+      {
+        "from": "README_zh.md",
+        "to": "README_zh.md"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "examples",
+        "to": "examples",
+        "filter": [
+          "**/*",
+          "!**/*.mp4",
+          "!**/*.mov",
+          "!**/*.m4a",
+          "!**/*.wav",
+          "!**/*.aac",
+          "!**/*.srt",
+          "!**/*.ass",
+          "!**/shorts_out{,/**}",
+          "!**/*.openai_chunks{,/**}",
+          "!**/.venv{,/**}",
+          "!**/__pycache__{,/**}",
+          "!**/*.pyc",
+          "!**/.DS_Store"
+        ]
+      },
+      {
+        "from": "resources/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "**/*",
+          "!**/*.mp4",
+          "!**/*.mov",
+          "!**/*.m4a",
+          "!**/*.wav",
+          "!**/*.aac",
+          "!**/*.srt",
+          "!**/*.ass",
+          "!**/shorts_out{,/**}",
+          "!**/*.openai_chunks{,/**}",
+          "!**/.venv{,/**}",
+          "!**/__pycache__{,/**}",
+          "!**/*.pyc",
+          "!**/.DS_Store"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
   }
 }

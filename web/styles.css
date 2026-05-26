@@ -62,6 +62,16 @@ button:active {
   transform: translateY(1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+button:disabled:hover {
+  border-color: var(--line);
+  background: #23231f;
+}
+
 button.primary {
   border-color: #55dcb3;
   background: var(--accent);
@@ -707,7 +717,7 @@ body[data-mode="shorts"] .cue-keep {
 .plan-panel {
   min-height: 280px;
   display: grid;
-  grid-template-rows: auto minmax(160px, 1fr) auto;
+  grid-template-rows: auto minmax(160px, 1fr) auto auto;
   gap: 12px;
   padding: 12px;
 }
@@ -812,6 +822,69 @@ tr.selected td {
   white-space: nowrap;
 }
 
+.task-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  background: #11110f;
+  padding: 10px;
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.task-state span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#runtimeStatus {
+  color: #d8d4c8;
+}
+
+#taskStatus {
+  border-left: 1px solid var(--line);
+  padding-left: 8px;
+}
+
+#cancelTask {
+  width: 78px;
+  height: 32px;
+  padding: 0 10px;
+}
+
+.task-log {
+  min-height: 82px;
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0b0b0a;
+  color: #d8d4c8;
+  padding: 9px 10px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @media (max-width: 1100px) {
   :root {
     --video-preview-height: 480px;
@@ -898,5 +971,16 @@ tr.selected td {
 
   body[data-mode="remove"] .timestamp-nav {
     display: flex;
+  }
+
+  .command-box,
+  .task-header,
+  .task-state {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  #cancelTask {
+    width: 100%;
   }
 }

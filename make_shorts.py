@@ -59,7 +59,7 @@ def subtitle_filter(font_size: int, margin_v: int, font_name: str) -> str:
         f"OutlineColour=&H00000000,BorderStyle=1,Outline={outline},Shadow=0,"
         f"Alignment=2,MarginV={margin_v}"
     ).replace(",", r"\,")
-    return f"subtitles=subs.srt:force_style='{style}'"
+    return f"subtitles=filename=subs.srt:force_style={style}"
 
 
 def base_video_filter(mode: str, width: int, height: int) -> str:
