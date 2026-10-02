@@ -1,5 +1,25 @@
 # npocut - timestamp based CLI 剪辑工具
 
+## Windows 桌面版
+
+在 [GitHub Releases](https://github.com/roclive/npocut/releases/latest) 下载 Windows x64 安装包（`*-setup.exe`）或免安装 ZIP。ZIP 必须完整解压，再启动 `npocut.exe`。
+
+内置 Electron、Python、FFmpeg/FFprobe 和 faster-whisper，无需另外安装运行环境。支持 Windows 10/11 x64。加载任意目录的视频和 SRT 后点击 **Run**，可在应用中查看日志、取消任务。结果、计划和修改后的字幕保存在“文档\npocut”，点击 **Open output folder** 打开；导入的原文件不会被覆盖。首次自动生成字幕需要联网下载 Whisper 模型，后续复用缓存。
+
+当前安装包未进行代码签名，Windows 可能显示未知发布者提示。发布页提供 SHA-256 校验值。
+
+从源码构建（Windows x64，Node.js 22+）：
+
+```powershell
+npm ci
+npm test
+npm run dist:win
+node scripts/smoke-electron.mjs dist/win-unpacked/npocut.exe
+```
+
+产物位于 `dist/`。`npm start` 启动开发版（先运行 `npm run prepare:runtime`）。可用 `NPOCUT_WORKSPACE` 环境变量指定输出目录。仓库的 Windows release 工作流可手动构建、测试并发布 package.json 中的版本。
+
+
 `npocut` 是一个基于命令行和 timestamp 的视频剪辑工具集，适合 YouTube 长视频、单个 Shorts、字幕生成、字幕微调、字幕烧录和按 SRT 快速找剪辑点。Web UI 运行在本机浏览器里，视频不会上传。
 
 ## Quick Start on macOS

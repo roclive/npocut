@@ -1,5 +1,16 @@
 # npocut - timestamp based CLI 剪辑工具
 
+## Windows desktop app
+
+Download the x64 installer (`*-setup.exe`) or portable ZIP from [GitHub Releases](https://github.com/roclive/npocut/releases/latest). Extract the entire ZIP before running `npocut.exe`.
+
+Windows 10/11 x64 is supported. Electron, Python, FFmpeg/FFprobe, and faster-whisper are bundled. Load media from any folder and click **Run** to process it with in-app logs and cancellation. Outputs, plans, and subtitle edits go to **Documents\npocut**; imported originals are preserved. First transcription needs internet access to download Whisper weights; subsequent runs reuse the cache.
+
+The app is unsigned. Windows may display an unknown-publisher prompt. SHA-256 checksums are supplied with the release.
+
+Build on Windows x64 with Node.js 22+: `npm ci`, `npm test`, then `npm run dist:win`. Verify the built executable with `node scripts/smoke-electron.mjs dist/win-unpacked/npocut.exe`. Artifacts are in `dist/`. For development run `npm run prepare:runtime` then `npm start`. Set `NPOCUT_WORKSPACE` to customize the output folder. The manually dispatched Windows release workflow builds, tests, and publishes the version in package.json.
+
+
 ## English Version
 
 `npocut` is a timestamp-first video editing toolkit for long YouTube videos, single Shorts, subtitle generation, subtitle cleanup, subtitle burn-in, and SRT-based edit planning. It provides both practical Python CLI scripts and a local Web UI. Media files stay on your machine and are not uploaded.

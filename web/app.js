@@ -1,4 +1,9 @@
 const $ = (id) => document.getElementById(id);
+const desktopConfig = window.npocut ? await window.npocut.getConfig() : null;
+function apiFetch(url, options = {}) {
+  return fetch(url, { ...options, headers: { ...options.headers,
+    ...(desktopConfig ? { 'X-Npocut-Token': desktopConfig.token } : {}) } });
+}
 
 const els = {
   video: $("video"),
@@ -336,7 +341,8 @@ function seekTo(seconds) {
   updateTimeReadout(els.video.currentTime, true);
 }
 
-function loadVideo(file) {
+async function loadVideo(file) {
+  if (window.npocut) await window.npocut.registerFile(file);
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.videoName = file.name;
   state.videoUrl = URL.createObjectURL(file);
@@ -373,6 +379,7 @@ function parseSrt(text) {
 }
 
 async function loadSrt(file) {
+  if (window.npocut) await window.npocut.registerFile(file);
   if (state.srtBackupTimer) {
     clearTimeout(state.srtBackupTimer);
     state.srtBackupTimer = null;
@@ -624,7 +631,7 @@ async function saveSrtEdits() {
   }
 
   try {
-    const response = await fetch("/api/save-srt", {
+    const response = await apiFetch("/api/save-srt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename: state.srtName, content: buildSrtText() }),
@@ -649,7 +656,7 @@ async function saveSrtBackup() {
   }
 
   try {
-    const response = await fetch("/api/save-srt", {
+    const response = await apiFetch("/api/save-srt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename: state.srtBackupName, content: buildSrtText() }),
@@ -883,7 +890,7 @@ async function exportPlan() {
   }
   const content = buildPlanText();
   try {
-    const response = await fetch("/api/export-plan", {
+    const response = await apiFetch("/api/export-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename, content }),
@@ -921,7 +928,7 @@ async function savePlanIfNeeded() {
     }
   }
 
-  const response = await fetch("/api/export-plan", {
+  const response = await apiFetch("/api/export-plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename, content: buildPlanText() }),
@@ -939,8 +946,9 @@ async function runCommandInTerminal() {
   }
 
   try {
+    if (window.npocut) { $("jobLog").textContent = ''; $("jobPanel").hidden = false; }
     const savedPath = await savePlanIfNeeded();
-    const response = await fetch("/api/run-command", {
+    const response = await apiFetch("/api/run-command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command, videoName: state.videoName }),
@@ -948,7 +956,7 @@ async function runCommandInTerminal() {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Terminal launch failed");
     const saved = savedPath ? ` / plan saved: ${savedPath}` : "";
-    setStatus(`Terminal launched: ${result.cwd}${saved}`);
+    setStatus(`${window.npocut ? 'Task started; output' : 'Terminal launched'}: ${result.cwd}${saved}`);
   } catch (error) {
     setStatus(error.message || "Terminal launch failed");
   }
@@ -1170,12 +1178,12 @@ document.querySelectorAll(".mode-tab").forEach((button) => {
 
 els.videoInput.addEventListener("change", (event) => {
   const [file] = event.target.files || [];
-  if (file) loadVideo(file);
+  if (file) loadVideo(file).catch(error => setStatus(error.message));
 });
 
 els.srtInput.addEventListener("change", async (event) => {
   const [file] = event.target.files || [];
-  if (file) await loadSrt(file);
+  if (file) { try { await loadSrt(file); } catch (error) { setStatus(error.message); } }
 });
 
 els.planInput.addEventListener("change", async (event) => {
@@ -1277,3 +1285,21 @@ setSeekStepSeconds(seekStepSeconds);
 if (videoPreviewHeight) setVideoPreviewHeight(videoPreviewHeight);
 updateTimeReadout(currentTime(), true);
 updateMode(state.mode);
+
+if (window.npocut) {
+  els.runCommand.textContent = 'Run';
+  $('jobPanel').hidden = false;
+  $('outputLocation').textContent = `Output: ${desktopConfig.workspace}. First transcription downloads the Whisper model (internet required).`;
+  $('openOutput').addEventListener('click', () => window.npocut.openOutput());
+  $('cancelJob').addEventListener('click', () => window.npocut.cancel());
+  window.npocut.onLog(text => {
+    const log = $('jobLog');
+    log.textContent = (log.textContent + text).slice(-200000);
+    log.scrollTop = log.scrollHeight;
+  });
+  window.npocut.onDone(code => {
+    const message = code === 0 ? 'Task completed. Open output folder to view results.' : `Task stopped or failed (exit ${code}). See the log.`;
+    $('jobLog').textContent += `\n${message}\n`;
+    setStatus(message);
+  });
+}

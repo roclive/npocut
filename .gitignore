@@ -31,3 +31,9 @@ shorts_out/
 *.log
 tmp/
 temp/
+node_modules/
+dist/
+runtime/
+.build-cache/
+.venv/
+output/

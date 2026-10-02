@@ -45,14 +45,14 @@ function safePath(urlPath) {
   return resolved;
 }
 
-function safeWorkspaceFile(filename, allowedExts) {
+function safeWorkspaceFile(filename, allowedExts, workspace = __dirname) {
   const clean = basename(String(filename || ""));
   const extension = extname(clean).toLowerCase();
   if (!clean || !allowedExts.has(extension)) {
     throw new Error(`Unsupported file: ${filename}`);
   }
-  const resolved = normalize(join(__dirname, clean));
-  if (resolved !== __dirname && !resolved.startsWith(__dirname + sep)) {
+  const resolved = normalize(join(workspace, clean));
+  if (resolved !== workspace && !resolved.startsWith(workspace + sep)) {
     throw new Error(`Unsafe file path: ${filename}`);
   }
   return { name: clean, path: resolved, ext: extension };
@@ -120,8 +120,12 @@ function openTerminal(command) {
   child.unref();
 }
 
-function createAppServer() {
+export function createAppServer({ workspace = __dirname, runCommand = openTerminal, token, onSave = () => {} } = {}) {
   return createServer(async (req, res) => {
+  if (req.method === "POST" && token && req.headers["x-npocut-token"] !== token) {
+    sendJson(res, 403, { error: "Unauthorized request" });
+    return;
+  }
   if (req.method === "POST" && req.url === "/api/advanced-cut") {
     sendJson(res, 410, {
       error: "Advanced Cut now marks subtitle rows and exports a reversed keep plan: cut_plan_new.csv.",
@@ -133,8 +137,8 @@ function createAppServer() {
     try {
       const payload = JSON.parse(await readRequestBody(req) || "{}");
       const command = String(payload.command || "").trim();
-      openTerminal(command);
-      sendJson(res, 200, { ok: true, cwd: __dirname, command });
+      await runCommand(command);
+      sendJson(res, 200, { ok: true, cwd: workspace, command });
     } catch (error) {
       sendJson(res, 500, { error: error.message || "Run failed" });
     }
@@ -151,8 +155,9 @@ function createAppServer() {
         return;
       }
 
-      const outputPath = join(__dirname, filename);
+      const outputPath = join(workspace, filename);
       await writeFile(outputPath, content, "utf8");
+      onSave(filename, outputPath);
       sendJson(res, 200, { ok: true, path: outputPath });
     } catch (error) {
       sendJson(res, 500, { error: error.message || "Export failed" });
@@ -163,10 +168,11 @@ function createAppServer() {
   if (req.method === "POST" && req.url === "/api/save-srt") {
     try {
       const payload = JSON.parse(await readRequestBody(req, 10_000_000) || "{}");
-      const srt = safeWorkspaceFile(payload.filename, new Set([".srt"]));
+      const srt = safeWorkspaceFile(payload.filename, new Set([".srt"]), workspace);
       const content = String(payload.content || "");
-      const outputPath = join(__dirname, srt.name);
+      const outputPath = join(workspace, srt.name);
       await writeFile(outputPath, content, "utf8");
+      onSave(srt.name, outputPath);
       sendJson(res, 200, { ok: true, path: outputPath, filename: srt.name });
     } catch (error) {
       sendJson(res, 500, { error: error.message || "SRT save failed" });
@@ -183,7 +189,7 @@ function createAppServer() {
   if (req.url?.startsWith("/media/")) {
     try {
       const name = decodeURIComponent(req.url.split("?")[0].replace(/^\/media\//, ""));
-      const media = safeWorkspaceFile(name, mediaFiles);
+      const media = safeWorkspaceFile(name, mediaFiles, workspace);
       if (!existsSync(media.path)) {
         res.writeHead(404);
         res.end("Not found");
@@ -205,7 +211,9 @@ function createAppServer() {
     return;
   }
 
-  const filePath = safePath(req.url || "/");
+  let filePath;
+  try { filePath = safePath(req.url || "/"); }
+  catch { res.writeHead(400); res.end("Bad request"); return; }
   if (!filePath) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -237,9 +245,9 @@ function listen(candidatePort) {
     throw error;
   });
 
-  server.listen(candidatePort, () => {
+  server.listen(candidatePort, "127.0.0.1", () => {
     console.log(`npocut UI running at http://localhost:${candidatePort}`);
   });
 }
 
-listen(port);
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) listen(port);

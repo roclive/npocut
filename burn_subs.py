@@ -24,7 +24,7 @@ from faster_whisper import WhisperModel
 # Homebrew's slim `ffmpeg` lacks libass. Prefer `ffmpeg-full` if installed
 # (keg-only at /opt/homebrew/opt/ffmpeg-full/bin), else fall back to PATH.
 _FFMPEG_FULL = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"
-FFMPEG = _FFMPEG_FULL if os.path.exists(_FFMPEG_FULL) else "ffmpeg"
+FFMPEG = os.environ.get("NPOCUT_FFMPEG") or (_FFMPEG_FULL if os.path.exists(_FFMPEG_FULL) else "ffmpeg")
 
 
 def fmt_ts(seconds: float) -> str:

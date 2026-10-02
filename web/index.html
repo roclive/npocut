@@ -158,6 +158,14 @@
       </section>
     </main>
 
+    <section id="jobPanel" class="plan-panel" hidden aria-label="Task output">
+      <div class="plan-header"><h2>Task log</h2><div class="plan-actions">
+        <button id="openOutput" class="secondary">Open output folder</button>
+        <button id="cancelJob" class="secondary">Cancel task</button>
+      </div></div>
+      <p id="outputLocation"></p>
+      <pre id="jobLog" style="white-space:pre-wrap;max-height:280px;overflow:auto" aria-live="polite"></pre>
+    </section>
     <script src="./app.js" type="module"></script>
   </body>
 </html>
