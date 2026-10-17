@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import hashlib
+import logging
+import time
 from datetime import datetime, timezone
 import json
 import math
@@ -62,6 +66,85 @@ def synthesize_segment(text: str, voice: str, target: Path) -> float:
     ffmpeg('-i', source, '-af', f'apad=pad_dur={PAD}', '-ar', 24000,
            '-ac', 1, '-c:a', 'pcm_s16le', target)
     return probe_duration(target)
+
+
+EDGE_VOICES = {'zh': 'zh-CN-YunyangNeural', 'ja': 'ja-JP-KeitaNeural',
+               'en': 'en-US-GuyNeural'}
+
+
+async def edge_stream(text: str, voice: str, target: Path) -> list[dict]:
+    import edge_tts
+    boundaries = []
+    with target.open('wb') as audio:
+        async for event in edge_tts.Communicate(
+                text, voice, boundary="SentenceBoundary").stream():
+            if event['type'] == 'audio':
+                audio.write(event['data'])
+            elif event['type'] == 'SentenceBoundary':
+                boundaries.append(dict(text=event['text'], start=event['offset'] / 1e7,
+                                       duration=event['duration'] / 1e7))
+    return boundaries
+
+
+def cached_speech(text: str, voice: str, backend: str, target: Path,
+                  cache: Path) -> tuple[float, list[dict]]:
+    if backend == 'fake':
+        return synthesize_segment(text, voice, target), []
+    key = hashlib.sha256(json.dumps([backend, voice, text], ensure_ascii=False).encode()).hexdigest()
+    wav, metadata = cache / (key + '.wav'), cache / (key + '.json')
+    if wav.is_file() and metadata.is_file():
+        boundaries = json.loads(metadata.read_text(encoding='utf-8'))
+        shutil.copyfile(wav, target)
+        return probe_duration(target), boundaries
+    boundaries = []
+    if backend == 'edge' and text.strip():
+        mp3 = target.with_suffix('.mp3')
+        for attempt in range(3):
+            try:
+                boundaries = asyncio.run(asyncio.wait_for(edge_stream(text, voice, mp3), 60))
+                break
+            except ImportError:
+                raise
+            except Exception:
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
+        ffmpeg('-i', mp3, '-af', f'apad=pad_dur={PAD}', '-ar', 24000,
+               '-ac', 1, '-c:a', 'pcm_s16le', target)
+        duration = probe_duration(target)
+    else:
+        duration = synthesize_segment(text, voice, target)
+    cache.mkdir(parents=True, exist_ok=True)
+    # Publish complete files atomically, including during simultaneous renders.
+    with tempfile.TemporaryDirectory(dir=cache) as directory:
+        staged = Path(directory)
+        shutil.copyfile(target, staged / 'audio.wav')
+        (staged / 'boundary.json').write_text(json.dumps(boundaries, ensure_ascii=False), encoding='utf-8')
+        os.replace(staged / 'audio.wav', wav)
+        os.replace(staged / 'boundary.json', metadata)
+    return duration, boundaries
+
+
+def subtitle_chunks(sentence: str, size: tuple[int, int]) -> list[str]:
+    font = ImageFont.truetype(font_path(), subtitle_font_size(size))
+    width = size[0] * .84
+    def fits(text):
+        if font.getlength(text) > width * 2:
+            return False
+        return len(wrap_text(text, font, width)) <= 2
+    def split(text):
+        if fits(text):
+            return [text]
+        candidates = [i for i in range(6, len(text)-5)
+                      if text[i-1] in '，、；：,;:']
+        if not candidates:
+            candidates = list(range(6, len(text)-5))
+        if not candidates:
+            return [text]
+        middle = min(candidates, key=lambda i: abs(speech_weight(text[:i]) - speech_weight(text[i:])))
+        return split(text[:middle]) + split(text[middle:])
+    pieces = split(sentence)
+    return ['\n'.join(wrap_text(piece, font, width)) for piece in pieces]
 
 
 def font_path() -> str:
@@ -195,26 +278,32 @@ def subtitle_font_size(size: tuple[int, int]) -> int:
 
 
 def make_subtitles(script: dict, durations: list[float], target: Path,
-                   size: tuple[int, int] | None = None) -> None:
+                   size: tuple[int, int] | None = None,
+                   boundaries: list[list[dict]] | None = None) -> None:
     cues = []
     offset = 0.0
-    for segment, duration in zip(script['segments'], durations):
-        sentences = [s.strip() for s in re.findall(r'[^。！？.!?\n]+[。！？.!?]*|[。！？.!?]+',
-                                                   segment['narration']) if s.strip()]
-        if size:
-            font = ImageFont.truetype(font_path(), subtitle_font_size(size))
-            chunks = []
+    for index, (segment, duration) in enumerate(zip(script['segments'], durations)):
+        events = boundaries[index] if boundaries else []
+        if not events:
+            sentences = [s.strip() for s in re.findall(r'[^。！？.!?\n]+[。！？.!?]*|[。！？.!?]+',
+                                                       segment['narration']) if s.strip()]
+            total = sum(speech_weight(s) for s in sentences) or 1
+            cursor = 0.0
+            events = []
             for sentence in sentences:
-                lines = wrap_text(sentence, font, size[0] * .84)
-                chunks.extend('\n'.join(lines[i:i+2]) for i in range(0, len(lines), 2))
-            sentences = chunks
-        weights = [max(.01, speech_weight(s)) for s in sentences]
-        total = sum(weights)
-        cursor = offset
-        for sentence, weight in zip(sentences, weights):
-            end = cursor + (duration-PAD) * weight / total
-            cues.append(Cue(cursor, end, tuple(sentence.split('\n'))))
-            cursor = end
+                length = (duration-PAD) * speech_weight(sentence) / total
+                events.append(dict(text=sentence, start=cursor, duration=length))
+                cursor += length
+        for event in events:
+            chunks = subtitle_chunks(event['text'], size) if size else [event['text']]
+            total = sum(speech_weight(c) for c in chunks) or 1
+            cursor = offset + event['start']
+            available = min(event['duration'], max(0, duration-PAD-event['start']))
+            for chunk in chunks:
+                end = cursor + available * speech_weight(chunk) / total
+                if end > cursor:
+                    cues.append(Cue(cursor, end, tuple(chunk.split('\n'))))
+                cursor = end
         offset += duration
     write_srt(cues, target)
 
@@ -238,8 +327,9 @@ def burn_subtitles(video: Path, target: Path, size: tuple[int, int], tmp: Path) 
 
 
 def write_manifest(script: dict, durations: list[float], voice: str,
-                   files: dict, final: Path, target: Path) -> None:
+                   files: dict, final: Path, target: Path, tts_backend="say", fallback_reason=None) -> None:
     manifest = dict(script=script, durations=durations, voice=voice, files=files,
+                    tts_backend=tts_backend, fallback_reason=fallback_reason,
                     total_duration=probe_duration(final),
                     created_at=datetime.now(timezone.utc).isoformat())
     target.write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
@@ -247,14 +337,20 @@ def write_manifest(script: dict, durations: list[float], voice: str,
 
 def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080),
                   voice: str | None = None, lang: str | None = None, burn: bool = True,
-                  custom_size: bool = False, output_slug: str | None = None) -> Path:
+                  custom_size: bool = False, output_slug: str | None = None, tts: str = "auto") -> Path:
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
     if any(not isinstance(s, dict) or not isinstance(s.get('narration'), str) for s in script['segments']):
         raise ValueError('Each segment must contain a narration string')
     if len(size) != 2 or any(n < 32 or n % 2 for n in size):
         raise ValueError('Size must contain even dimensions of at least 32 pixels')
-    voice = choose_voice(lang or script.get('lang', 'zh'), voice)
+    language = lang or script.get('lang', 'zh')
+    if tts not in ('auto', 'edge', 'say'):
+        raise ValueError('Unknown TTS backend')
+    backend = 'fake' if os.environ.get('NPOCUT_FAKE_TTS') == '1' else ('say' if tts == 'say' else 'edge')
+    voice = ('fake' if backend == 'fake' else
+             (voice or EDGE_VOICES[language]) if backend == 'edge' else choose_voice(language, voice))
+    fallback_reason = None
     if output_slug is not None and not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', output_slug):
         raise ValueError('Invalid output slug')
     slug = output_slug or slugify(script.get('id') or script.get('title', 'video'))
@@ -265,20 +361,37 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
     destination = out.resolve() / slug / format_name
     with tempfile.TemporaryDirectory(prefix='npocut-kb-') as directory:
         tmp = Path(directory)
-        audio, slides, durations = [], [], []
+        audio, slides, durations, boundaries = [], [], [], []
+        def synthesize_all():
+            durations.clear()
+            boundaries.clear()
+            for i, segment in enumerate(script['segments']):
+                duration, events = cached_speech(segment['narration'], voice, backend,
+                                                 tmp / f'audio-{i}.wav', out.resolve() / '.tts_cache')
+                durations.append(duration)
+                boundaries.append(events)
+        try:
+            synthesize_all()
+        except Exception as exc:
+            if tts != 'auto' or backend != 'edge':
+                raise
+            fallback_reason = f'{type(exc).__name__}: {exc}'
+            logging.warning('Edge TTS failed; using say for the whole video: %s', fallback_reason)
+            backend = 'say'
+            voice = choose_voice(language)
+            synthesize_all()
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
-            durations.append(synthesize_segment(segment['narration'], voice, wav))
             draw_slide(script, segment, i, size, slide)
             audio.append(wav)
             slides.append(slide)
         video = assemble(slides, audio, durations, tmp)
-        make_subtitles(script, durations, tmp / 'subs.srt', size)
+        make_subtitles(script, durations, tmp / 'subs.srt', size, boundaries)
         final = tmp / f'{slug}.subbed.mp4' if burn else video
         if burn:
             burn_subtitles(video, final, size, tmp)
         files = {'video': 'video.mp4', 'subtitles': 'subs.srt', 'final': final.name}
-        write_manifest(script, durations, voice, files, final, tmp / 'manifest.json')
+        write_manifest(script, durations, voice, files, final, tmp / 'manifest.json', backend, fallback_reason)
         destination.mkdir(parents=True, exist_ok=True)
         for name in set(files.values()) | {'manifest.json'}:
             shutil.copy2(tmp / name, destination / name)
@@ -294,6 +407,7 @@ def main(argv=None) -> int:
     parser.add_argument('--script', type=Path)
     parser.add_argument('--vertical', action='store_true')
     parser.add_argument('--size', help='Even WxH dimensions; vertical swaps landscape dimensions')
+    parser.add_argument('--tts', choices=['auto', 'edge', 'say'], default='auto')
     parser.add_argument('--voice')
     parser.add_argument('--lang', choices=['zh', 'ja', 'en'])
     parser.add_argument('--max-points', type=int, default=6)
@@ -316,7 +430,7 @@ def main(argv=None) -> int:
             script = build_script(item, args.max_points, args.lang or 'zh')
             script['categories'] = item.get('categories', [])
         print(render_script(script, out=args.out, size=size, voice=args.voice,
-                            lang=args.lang, burn=not args.no_burn, custom_size=bool(args.size)))
+                            lang=args.lang, tts=args.tts, burn=not args.no_burn, custom_size=bool(args.size)))
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'kb_video: {exc}\n')
     return 0

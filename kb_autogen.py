@@ -135,6 +135,7 @@ def main(argv=None) -> int:
     parser.add_argument('--strict', action='store_true')
     parser.add_argument('--force', metavar='ID')
     parser.add_argument('--size', default='1920x1080', help='Landscape WxH; vertical swaps dimensions')
+    parser.add_argument('--tts', choices=['auto', 'edge', 'say'], default='auto')
     parser.add_argument('--voice')
     parser.add_argument('--lang', choices=['zh', 'ja', 'en'], default='zh')
     parser.add_argument('--max-points', type=int, default=6)
@@ -146,7 +147,7 @@ def main(argv=None) -> int:
         size = tuple(map(int, args.size.lower().split('x')))
         if len(size) != 2 or any(n < 32 or n % 2 for n in size) or args.limit < 0 or args.max_points < 0:
             raise ValueError('Use even --size WxH >=32 and nonnegative limits')
-        options = dict(layout_version=2, formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
+        options = dict(layout_version=3, tts=args.tts, formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
                        max_points=args.max_points, burn=not args.no_burn,
                        font=kb_video.font_path(), fake_tts=os.environ.get('NPOCUT_FAKE_TTS') == '1')
         try:
@@ -211,7 +212,7 @@ def main(argv=None) -> int:
                         dimensions = ((max(size), min(size)) if fmt == 'landscape' else
                                       (min(size), max(size)))
                         final = kb_video.render_script(script, out=item_out, size=dimensions,
-                                                      voice=args.voice, lang=args.lang,
+                                                      voice=args.voice, lang=args.lang, tts=args.tts,
                                                       burn=not args.no_burn, output_slug=slugs[item_id])
                         outputs.append(str(final.resolve().relative_to(args.out.resolve())))
                     record.update(status='done', outputs=outputs)

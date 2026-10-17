@@ -188,3 +188,17 @@ def test_atomic_write_and_csv(tmp_out):
     import argparse
     with pytest.raises(argparse.ArgumentTypeError):
         autogen.csv_values('bogus', ['landscape'])
+
+
+def test_backend_and_voice_passthrough(setup, monkeypatch):
+    _, out, args = setup
+    captured = []
+    def render(*a, **kwargs):
+        captured.append((kwargs['tts'], kwargs['voice']))
+        raise ValueError('stub')
+    monkeypatch.setattr(autogen.kb_video, 'render_script', render)
+    assert autogen.main(args + ['--tts', 'say', '--voice', 'Tingting']) == 1
+    digest = state(out)['a']['hash']
+    assert autogen.main(args + ['--tts', 'edge', '--voice', 'zh-CN-YunyangNeural']) == 1
+    assert state(out)['a']['hash'] != digest
+    assert captured == [('say', 'Tingting'), ('edge', 'zh-CN-YunyangNeural')]

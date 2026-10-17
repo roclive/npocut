@@ -447,3 +447,9 @@ python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,
 指定解释器）。字幕按短边计算字号，每条最多两行。批量输出使用
 `kb_out/<slug>/<format>/`，仅在 slug 冲突时追加哈希；画廊按条目分组并预览横版。
 旧状态会在下次符合生成条件时自动重生成，受 `--limit` 限制。
+
+### 配音后端
+
+`kb_video.py` 和 `kb_autogen.py` 支持 `--tts auto|edge|say`（默认 `auto`）及后端专用的 `--voice`。Edge 需要联网，默认中文声音为 `zh-CN-YunyangNeural`，日语为 `ja-JP-KeitaNeural`，英语为 `en-US-GuyNeural`。Edge 失败后重试两次；auto 模式随后将整片重新用 macOS say 离线合成，中文优先 Tingting，避免混用声音。Edge 的声音覆盖参数不会传给 say；离线指定声音请使用 `--tts say --voice Tingting`。
+
+音频及句子边界缓存在 `kb_out/.tts_cache/`。`manifest.json` 记录 `tts_backend`、`voice` 和 `fallback_reason`。Edge 字幕按句子边界计时，长句优先按分句标点平衡切分，避免孤立短尾。`NPOCUT_FAKE_TTS=1` 始终使用离线静音。改变后端或声音会使 autogen 重新生成视频。
