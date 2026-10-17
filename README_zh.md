@@ -421,5 +421,5 @@ python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang j
 `--size WxH`、`--voice`、`--lang zh|ja|en`、`--max-points`、`--out`。
 `--vertical` 将横向尺寸交换为竖向，默认 1080x1920。`--script` 或 `--from-json`
 可离线使用，也可通过 `--base-url` 连接 OntoKB。语言参数选择声音和标签，不翻译正文。
-配音使用 macOS `say`；测试可设 `NPOCUT_FAKE_TTS=1` 生成静音。
+配音使用 macOS `say`，直接输出 24 kHz 单声道 PCM WAV（`--file-format=WAVE --data-format=LEI16@24000`）；测试可设 `NPOCUT_FAKE_TTS=1` 生成静音。
 工具和字体可通过 `NPOCUT_FFMPEG`、`NPOCUT_FFPROBE`、`NPOCUT_FONT` 覆盖。

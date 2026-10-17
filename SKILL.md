@@ -393,3 +393,5 @@ bypasses OntoKB completely; `--base-url` fetches live items. `--vertical`, `--si
 Final videos, SRT and the manifest live in ignored `kb_out/<slug>/`; intermediates
 are temporary. `NPOCUT_FAKE_TTS=1` enables offline silent test renders. Font and
 ffmpeg overrides use `NPOCUT_FONT`, `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`.
+Real TTS uses `say --file-format=WAVE --data-format=LEI16@24000` for 24 kHz
+mono WAV; keep the explicit WAVE format when changing synthesis commands.

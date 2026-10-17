@@ -1209,6 +1209,7 @@ files, and creation time). `--no-burn` returns the unburned video. Use `--size W
 `--voice`, `--lang zh|ja|en`, `--max-points`, and `--out` to customize. Vertical mode
 swaps landscape dimensions (default 1080x1920). `--script` works without OntoKB;
 otherwise use `--from-json` offline or `--base-url http://127.0.0.1:8765` online.
-Language selects voice/labels, not translation. macOS `say` supplies offline TTS;
+Language selects voice/labels, not translation. macOS `say` supplies offline TTS
+as 24 kHz mono PCM WAV (`--file-format=WAVE --data-format=LEI16@24000`);
 `NPOCUT_FAKE_TTS=1` generates silence for testing. Override tools/fonts with
 `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`, and `NPOCUT_FONT`.

@@ -56,8 +56,8 @@ def synthesize_segment(text: str, voice: str, target: Path) -> float:
     else:
         text_path = target.with_suffix('.txt')
         text_path.write_text(text, encoding='utf-8')
-        source = target.with_suffix('.aiff')
-        subprocess.run(['say', '-v', voice, '-o', str(source),
+        source = target.with_suffix('.raw.wav')
+        subprocess.run(['say', '-v', voice, '--file-format=WAVE', '-o', str(source),
                         '--data-format=LEI16@24000', '-f', str(text_path)], check=True)
     ffmpeg('-i', source, '-af', f'apad=pad_dur={PAD}', '-ar', 24000,
            '-ac', 1, '-c:a', 'pcm_s16le', target)

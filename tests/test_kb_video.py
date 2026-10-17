@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+import shutil
 import sys
+import wave
 
 import pytest
 
@@ -11,6 +13,19 @@ from common import parse_srt, probe_json
 from kb_source import load_library
 
 FIXTURE = ROOT / 'tests/fixtures/ontokb_reading.json'
+
+
+@pytest.mark.skipif(not shutil.which('say'), reason='macOS say is unavailable')
+def test_real_say_smoke(monkeypatch, tmp_path):
+    monkeypatch.delenv('NPOCUT_FAKE_TTS', raising=False)
+    target = tmp_path / 'speech.wav'
+    duration = video.synthesize_segment('你好，世界。', video.choose_voice('zh'), target)
+    with wave.open(str(target)) as audio:
+        assert audio.getframerate() == 24000
+        assert audio.getnchannels() == 1
+        assert audio.getsampwidth() == 2
+        assert audio.getnframes() / audio.getframerate() > .3
+    assert duration > .3
 
 
 @pytest.mark.parametrize('vertical', [False, True])
