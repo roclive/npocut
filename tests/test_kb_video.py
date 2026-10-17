@@ -15,19 +15,6 @@ from kb_source import load_library
 FIXTURE = ROOT / 'tests/fixtures/ontokb_reading.json'
 
 
-@pytest.mark.skipif(not shutil.which('say'), reason='macOS say is unavailable')
-def test_real_say_smoke(monkeypatch, tmp_path):
-    monkeypatch.delenv('NPOCUT_FAKE_TTS', raising=False)
-    target = tmp_path / 'speech.wav'
-    duration = video.synthesize_segment('你好，世界。', video.choose_voice('zh'), target)
-    with wave.open(str(target)) as audio:
-        assert audio.getframerate() == 24000
-        assert audio.getnchannels() == 1
-        assert audio.getsampwidth() == 2
-        assert audio.getnframes() / audio.getframerate() > .3
-    assert duration > .3
-
-
 @pytest.mark.parametrize('vertical', [False, True])
 def test_render_fixture(monkeypatch, tmp_path, vertical):
     monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
@@ -139,3 +126,71 @@ def test_kinsoku(text):
         assert all(font.getlength(line) <= width for line in lines)
         assert all(line[0] not in '，。、；：！？）」』】》…' for line in lines)
         assert all(line[-1] not in '（「『【《' for line in lines)
+
+
+@pytest.mark.parametrize('size,expected', [((1080, 1920), 49), ((1920, 1080), 38),
+                                         ((360, 640), 16), ((640, 360), 13)])
+def test_subtitle_font_orientation(size, expected):
+    assert video.subtitle_font_size(size) == expected
+
+
+def test_two_line_subtitles(tmp_out):
+    text = '混合 CJK and latin 日本語 emoji 🙂 unsupported \U0010ffff ' * 20
+    target = tmp_out / 'subs.srt'
+    video.make_subtitles({'segments': [{'narration': text}]}, [25.4], target, (360, 640))
+    cues = parse_srt(target)
+    assert len(cues) > 1
+    from PIL import ImageFont
+    font = ImageFont.truetype(video.font_path(), video.subtitle_font_size((360, 640)))
+    for cue in cues:
+        assert len(cue.lines) <= 2
+        assert all(font.getlength(line) <= 360 * .84 for line in cue.lines)
+    assert cues[-1].end == pytest.approx(25, abs=.002)
+
+
+def test_font_step_down_and_unsupported_glyphs(tmp_out):
+    text = '超长要点 with Latin 日本語 🙂 \U0010ffff ' * 50
+    font, lines, spacing = video.fit_text(text, 280, 80, 24)
+    assert font.size < 24
+    assert len(lines) * spacing <= 80
+    assert all(font.getlength(line) <= 280 for line in lines)
+    video.draw_slide({'title': '混合🙂', 'segments': [{}]},
+                     {'heading': 'ポイント', 'text': text}, 0, (320, 180), tmp_out / 'slide.png')
+    assert (tmp_out / 'slide.png').is_file()
+
+
+def test_fake_tts_weight_and_audio(tmp_out):
+    assert video.speech_weight('中A 日b') == pytest.approx(.48)
+    duration = video.synthesize_segment('中A', video.choose_voice('ja'), tmp_out / 'audio.wav')
+    assert duration == pytest.approx(1.5 + video.PAD, abs=.02)
+    with wave.open(str(tmp_out / 'audio.wav')) as audio:
+        assert audio.getnchannels() == 1 and audio.getframerate() == 24000
+
+
+def test_japanese_edge_render(tmp_out, tiny_size):
+    from kb_source import build_script
+    script = build_script(dict(id='ja', title='日本語🙂', summary='https://example.test',
+                               key_points=[]), lang='ja')
+    final = video.render_script(script, out=tmp_out, size=tiny_size)
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    assert manifest['script']['lang'] == 'ja'
+    assert manifest['voice'] == 'fake'
+    assert final.is_file()
+
+
+def test_long_collision_slug_preserved(tmp_out, tiny_size):
+    slug = 'a' * 80 + '-12345678'
+    script = {'id': 'a' * 100, 'segments': [{'narration': 'Hi'}]}
+    final = video.render_script(script, out=tmp_out, size=tiny_size, burn=False, output_slug=slug)
+    assert final.parent.parent.name == slug
+    with pytest.raises(ValueError, match='slug'):
+        video.render_script(script, size=tiny_size, output_slug='../escape')
+
+
+def test_voice_locale_fallback(monkeypatch):
+    monkeypatch.delenv('NPOCUT_FAKE_TTS', raising=False)
+    class Result:
+        stdout = 'Lili zh_CN # text\nKyoko ja_JP # text\nOtoya ja_JP # text'
+    monkeypatch.setattr(video.subprocess, 'run', lambda *a, **kw: Result())
+    assert video.choose_voice('zh') == 'Lili'
+    assert video.choose_voice('ja') == 'Kyoko'

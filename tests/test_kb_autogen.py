@@ -125,3 +125,66 @@ def test_hash_options():
     digest = autogen.content_hash(item, {'voice': 'one'})
     assert digest != autogen.content_hash(item, {'voice': 'two'})
     assert digest != autogen.content_hash(dict(item, key_points=['new']), {'voice': 'one'})
+
+
+@pytest.fixture
+def stub_render(monkeypatch):
+    calls = []
+    def render(script, *, out, size, output_slug, **kwargs):
+        calls.append((script['id'], output_slug))
+        folder = out / output_slug / ('landscape' if size[0] >= size[1] else 'vertical')
+        folder.mkdir(parents=True, exist_ok=True)
+        final = folder / 'video.mp4'
+        final.write_bytes(b'fixture')
+        (folder / 'manifest.json').write_text(json.dumps(dict(script=script, total_duration=3.8)))
+        return final
+    monkeypatch.setattr(autogen.kb_video, 'render_script', render)
+    return calls
+
+
+def test_flat_collision_paths_and_grouped_gallery(setup, stub_render):
+    source, out, args = setup
+    source.write_text(json.dumps({'library': [
+        dict(id='a/b', title='<Shared title>', url='https://example.test/?a=1&b=2'),
+        dict(id='a b', title='Second')]}))
+    assert autogen.main(args + ['--formats', 'landscape,vertical']) == 0
+    records = state(out)
+    first = records['a/b']['outputs']
+    second = records['a b']['outputs']
+    assert first == ['a-b/landscape/video.mp4', 'a-b/vertical/video.mp4']
+    import hashlib
+    suffix = hashlib.sha256(b'a b').hexdigest()[:8]
+    assert all(path.startswith(f'a-b-{suffix}/') for path in second)
+    gallery = (out / 'index.html').read_text()
+    assert gallery.count('<li>') == 2
+    assert gallery.count('&lt;Shared title&gt;') == 1
+    assert gallery.count('<video ') == 2
+    assert gallery.count('MP4 (') == 4
+    assert 'a=1&amp;b=2' in gallery
+    assert autogen.main(args + ['--formats', 'landscape,vertical']) == 0
+    assert len(stub_render) == 4
+
+
+def test_legacy_state_regenerates_and_missing_output_recovers(setup, stub_render):
+    _, out, args = setup
+    out.mkdir()
+    autogen.atomic_write(out / 'autogen_state.json', json.dumps({'a': dict(
+        hash='legacy-render-options', status='done', attempts=1,
+        outputs=['item-legacy/a/landscape/video.mp4'])}))
+    assert autogen.main(args) == 0
+    assert state(out)['a']['outputs'] == ['a/landscape/video.mp4']
+    (out / state(out)['a']['outputs'][0]).unlink()
+    assert autogen.main(args) == 0
+    assert len(stub_render) == 2
+
+
+def test_atomic_write_and_csv(tmp_out):
+    target = tmp_out / 'nested/state.json'
+    autogen.atomic_write(target, 'one')
+    autogen.atomic_write(target, 'two')
+    assert target.read_text() == 'two'
+    assert list(target.parent.iterdir()) == [target]
+    assert autogen.csv_values('vertical, landscape,vertical') == ['landscape', 'vertical']
+    import argparse
+    with pytest.raises(argparse.ArgumentTypeError):
+        autogen.csv_values('bogus', ['landscape'])

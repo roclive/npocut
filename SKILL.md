@@ -408,3 +408,11 @@ static gallery live under ignored `kb_out/`. Failed hashes get three attempts;
 changed hashes reset attempts. The two-hour lock lease prevents cron overlaps;
 finish runs within two hours. Live API outages skip with exit 0 unless `--strict`.
 Every run ends with JSON counts. Dry runs leave state and gallery unchanged.
+
+KB quality checks: run `python3 -m pytest -q tests` (offline fake TTS), or
+`scripts/kb_smoke.sh` for a 640x360 burned-subtitle fixture render and output path.
+Batch output is `kb_out/<slug>/<format>/` with collision-only hash suffixes; old
+state regenerates within the normal limit. Gallery entries group all formats and
+preview landscape. Subtitle cues have at most two measured lines; pixel font size
+is 4.5% of the short side vertically and 3.5% horizontally. Language selects labels
+and voice, without translating source text; unsupported glyphs may show tofu.

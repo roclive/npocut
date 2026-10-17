@@ -82,20 +82,33 @@ def write_gallery(out: Path, state: dict) -> None:
     rows = []
     esc = lambda value: html.escape(str(value), quote=True)
     for record in state.values():
+        formats = []
+        preview = ''
+        manifest = None
         for output in record.get('outputs', []):
             video = out / output
             if not video.is_file():
                 continue
-            manifest_path = video.parent / 'manifest.json'
-            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            current = json.loads((video.parent / 'manifest.json').read_text(encoding='utf-8'))
+            manifest = manifest or current
+            href = esc(quote(output))
+            formats.append(f'<a href="{href}">MP4 ({esc(video.parent.name)})</a>')
+            # Standard landscape names and custom WxH dimensions both work.
+            name = video.parent.name
+            landscape = name == 'landscape'
+            if 'x' in name:
+                dimensions = name.split('x')
+                landscape = len(dimensions) == 2 and all(d.isdigit() for d in dimensions) and int(dimensions[0]) >= int(dimensions[1])
+            if landscape and not preview:
+                preview = f'<video controls preload="metadata" width="640" style="max-width:100%" src="{href}"></video>'
+        if manifest:
             script = manifest['script']
             url = str(script.get('url', ''))
             source = (f'<a href="{esc(url)}">Source</a>'
                       if urlsplit(url).scheme in ('http', 'https') else esc(url))
             rows.append(f'<li><h2>{esc(script.get("title", "Untitled"))}</h2>'
                         f'<p>{float(manifest["total_duration"]):.1f} s · '
-                        f'<a href="{esc(quote(output))}">MP4 ({esc(video.parent.name)})</a> · '
-                        f'{source}</p></li>')
+                        + ' · '.join(formats) + f' · {source}</p>{preview}</li>')
     atomic_write(out / 'index.html', '<!doctype html><html lang="en"><meta charset="utf-8">'
                  '<meta name="viewport" content="width=device-width"><title>OntoKB videos</title>'
                  '<body><h1>OntoKB videos</h1><ul>' + ''.join(rows) + '</ul></body></html>\n')
@@ -133,7 +146,7 @@ def main(argv=None) -> int:
         size = tuple(map(int, args.size.lower().split('x')))
         if len(size) != 2 or any(n < 32 or n % 2 for n in size) or args.limit < 0 or args.max_points < 0:
             raise ValueError('Use even --size WxH >=32 and nonnegative limits')
-        options = dict(formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
+        options = dict(layout_version=2, formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
                        max_points=args.max_points, burn=not args.no_burn,
                        font=kb_video.font_path(), fake_tts=os.environ.get('NPOCUT_FAKE_TTS') == '1')
         try:
@@ -147,6 +160,21 @@ def main(argv=None) -> int:
         with run_lock(args.out):
             state_path = args.out / 'autogen_state.json'
             state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
+            # Reserve slugs for all known IDs, including records absent from this snapshot.
+            slugs = {}
+            used = set()
+            ids = list(state) + [str(item.get('id', '')) for item in library]
+            for identity in ids:
+                if identity in slugs:
+                    continue
+                base = kb_source.slugify(identity)
+                candidate = base
+                if candidate in used:
+                    candidate = base + '-' + hashlib.sha256(identity.encode()).hexdigest()[:8]
+                while candidate in used:
+                    candidate += '-x'
+                slugs[identity] = candidate
+                used.add(candidate)
             selected = 0
             seen = set()
             for item in library:
@@ -158,7 +186,9 @@ def main(argv=None) -> int:
                 digest = content_hash(item, options)
                 old = state.get(item_id, {})
                 changed = old.get('hash') != digest
-                eligible = (changed or (old.get('status') == 'failed' and old.get('attempts', 0) < 3)
+                missing = old.get('status') == 'done' and (not old.get('outputs') or any(
+                    not (args.out / output).is_file() for output in old.get('outputs', [])))
+                eligible = (changed or missing or (old.get('status') == 'failed' and old.get('attempts', 0) < 3)
                             or args.force == item_id)
                 if (not eligible or selected >= args.limit or
                         (args.kinds and item.get('kind') not in args.kinds)):
@@ -175,15 +205,14 @@ def main(argv=None) -> int:
                 try:
                     script = kb_source.build_script(item, args.max_points, args.lang)
                     script['categories'] = item.get('categories', [])
-                    # Hash the ID to prevent collisions between slugified IDs.
-                    item_out = args.out / ('item-' + hashlib.sha256(item_id.encode()).hexdigest()[:16])
+                    item_out = args.out
                     outputs = []
                     for fmt in args.formats:
                         dimensions = ((max(size), min(size)) if fmt == 'landscape' else
                                       (min(size), max(size)))
                         final = kb_video.render_script(script, out=item_out, size=dimensions,
                                                       voice=args.voice, lang=args.lang,
-                                                      burn=not args.no_burn)
+                                                      burn=not args.no_burn, output_slug=slugs[item_id])
                         outputs.append(str(final.resolve().relative_to(args.out.resolve())))
                     record.update(status='done', outputs=outputs)
                     counts['generated'] += 1

@@ -121,3 +121,22 @@ def test_cli_list_and_script(tmp_path):
     result = subprocess.run([sys.executable, str(ROOT / "kb_source.py"), "script", "missing",
                              "--from-json", str(FIXTURE)], capture_output=True, text=True)
     assert result.returncode == 1 and "Item not found" in result.stderr
+
+
+@pytest.mark.parametrize('summary', ['', None, 'https://example.test/path?q=1', 'www.example.test'])
+@pytest.mark.parametrize('points', [None, []])
+def test_empty_or_url_only_content(summary, points):
+    script = kb.build_script(dict(title='日本語 mixed 🙂', summary=summary, key_points=points), lang='ja')
+    assert [s['kind'] for s in script['segments']] == ['title', 'outro']
+    assert script['segments'][-1]['narration'] == '以上です'
+
+
+@pytest.mark.parametrize('kwargs', [{'lang': 'xx'}, {'max_points': -1}])
+def test_invalid_script_options(kwargs):
+    with pytest.raises(ValueError):
+        kb.build_script({}, **kwargs)
+
+
+def test_invalid_points():
+    with pytest.raises(ValueError, match='key_points'):
+        kb.build_script({'key_points': 'wrong'})

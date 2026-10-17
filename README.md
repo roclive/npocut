@@ -1234,3 +1234,11 @@ Offline live API runs print `ontokb offline, skipped` and exit 0 (`--strict`: ex
 Invalid snapshots and render failures exit 1. Dry runs print the plan without
 rendering or updating state/gallery. Videos use collision-resistant item folders
 inside the output directory; all generated files remain gitignored under `kb_out/`.
+
+Quality check: `python3 -m pytest -q tests` runs offline with fake TTS. Run
+`scripts/kb_smoke.sh` for a 640x360 fixture render with burned subtitles; it prints
+the output path (`PYTHON` overrides the interpreter). Subtitles use the short side
+for sizing and split long narration into at most two lines per cue. Batch outputs
+use `kb_out/<slug>/<format>/`, adding a hash suffix only for slug collisions.
+The gallery groups formats under each item with a landscape preview. Older batch
+state regenerates automatically on its next eligible run (subject to `--limit`).

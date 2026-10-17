@@ -441,3 +441,9 @@ python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,
 `ontokb offline, skipped` 并返回 0，`--strict` 则返回 1；快照错误或渲染失败返回 1。
 `--dry-run` 仅打印计划，不渲染或更新状态及图库。结尾输出一行
 `generated`、`skipped`、`failed` JSON 统计。所有生成文件应放在已忽略的 `kb_out/`。
+
+质量检查：`python3 -m pytest -q tests` 使用假配音离线运行。
+`scripts/kb_smoke.sh` 生成 640x360 的样例烧字幕视频并打印路径（可用 `PYTHON`
+指定解释器）。字幕按短边计算字号，每条最多两行。批量输出使用
+`kb_out/<slug>/<format>/`，仅在 slug 冲突时追加哈希；画廊按条目分组并预览横版。
+旧状态会在下次符合生成条件时自动重生成，受 `--limit` 限制。

@@ -189,18 +189,31 @@ def assemble(slides: list[Path], audio: list[Path], durations: list[float], tmp:
     return output
 
 
-def make_subtitles(script: dict, durations: list[float], target: Path) -> None:
+def subtitle_font_size(size: tuple[int, int]) -> int:
+    """Subtitle pixel size based on the short side and orientation."""
+    return max(1, round(min(size) * (.045 if size[1] > size[0] else .035)))
+
+
+def make_subtitles(script: dict, durations: list[float], target: Path,
+                   size: tuple[int, int] | None = None) -> None:
     cues = []
     offset = 0.0
     for segment, duration in zip(script['segments'], durations):
         sentences = [s.strip() for s in re.findall(r'[^。！？.!?\n]+[。！？.!?]*|[。！？.!?]+',
                                                    segment['narration']) if s.strip()]
+        if size:
+            font = ImageFont.truetype(font_path(), subtitle_font_size(size))
+            chunks = []
+            for sentence in sentences:
+                lines = wrap_text(sentence, font, size[0] * .84)
+                chunks.extend('\n'.join(lines[i:i+2]) for i in range(0, len(lines), 2))
+            sentences = chunks
         weights = [max(.01, speech_weight(s)) for s in sentences]
         total = sum(weights)
         cursor = offset
         for sentence, weight in zip(sentences, weights):
             end = cursor + (duration-PAD) * weight / total
-            cues.append(Cue(cursor, end, (sentence,)))
+            cues.append(Cue(cursor, end, tuple(sentence.split('\n'))))
             cursor = end
         offset += duration
     write_srt(cues, target)
@@ -214,9 +227,9 @@ def burn_subtitles(video: Path, target: Path, size: tuple[int, int], tmp: Path) 
     shutil.copyfile(font_file, fonts / font_file.name)
     family = ImageFont.truetype(str(font_file), 20).getname()[0]
     # libass's default PlayResY is 288: express styles in that coordinate space.
-    font_size = max(1, round(288 * min(size) / size[1] * .033))
+    font_size = max(1, round(288 * subtitle_font_size(size) / size[1]))
     style = (f'FontName={family},FontSize={font_size},Alignment=2,'
-             'MarginV=9,MarginL=18,MarginR=18,Outline=1,Shadow=0')
+             'MarginV=12,MarginL=18,MarginR=18,WrapStyle=2,Outline=1,Shadow=0')
     style = style.replace(',', r'\,')
     ffmpeg('-i', video, '-vf', f'subtitles=subs.srt:fontsdir=fonts:force_style={style}',
            '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
@@ -234,7 +247,7 @@ def write_manifest(script: dict, durations: list[float], voice: str,
 
 def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080),
                   voice: str | None = None, lang: str | None = None, burn: bool = True,
-                  custom_size: bool = False) -> Path:
+                  custom_size: bool = False, output_slug: str | None = None) -> Path:
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
     if any(not isinstance(s, dict) or not isinstance(s.get('narration'), str) for s in script['segments']):
@@ -242,7 +255,9 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
     if len(size) != 2 or any(n < 32 or n % 2 for n in size):
         raise ValueError('Size must contain even dimensions of at least 32 pixels')
     voice = choose_voice(lang or script.get('lang', 'zh'), voice)
-    slug = slugify(script.get('id') or script.get('title', 'video'))
+    if output_slug is not None and not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', output_slug):
+        raise ValueError('Invalid output slug')
+    slug = output_slug or slugify(script.get('id') or script.get('title', 'video'))
     format_name = {(1920, 1080): 'landscape', (1080, 1920): 'vertical'}.get(
         tuple(size), f'{size[0]}x{size[1]}')
     if custom_size:
@@ -258,7 +273,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             audio.append(wav)
             slides.append(slide)
         video = assemble(slides, audio, durations, tmp)
-        make_subtitles(script, durations, tmp / 'subs.srt')
+        make_subtitles(script, durations, tmp / 'subs.srt', size)
         final = tmp / f'{slug}.subbed.mp4' if burn else video
         if burn:
             burn_subtitles(video, final, size, tmp)
