@@ -426,3 +426,4 @@ API, `ONTOKB_FROM_JSON` for a server-side offline snapshot, and `NPOCUT_PYTHON`
 for the Web server Python. Imported JSON is snapshotted under ignored `kb_out/`
 and reused for generation. Files are served only within that directory, with
 Range support. Check endpoints and guards using `npm run test:kb`.
+Identical libraries reuse `web-source-<sha256 first 16 hex>.json`; server startup removes `web-source-*.json` files older than 7 days.

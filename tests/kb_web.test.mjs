@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, symlink, rm, readdir, readFile, utimes, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -39,6 +40,26 @@ test('HTTP offline library, generation, preview ranges and traversal', async () 
     const post = (url, value) => fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
     const library = await (await post('/api/kb/library', { library: [{ id: 'article', title: '<script>', summary: 'hello', key_points: ['one'] }] })).json();
     assert.equal(library.library[0].key_points_count, 1);
+    assert.match(library.source, /^web-source-[a-f0-9]{16}\.json$/);
+    const snapshotPath = path.join(dir, 'kb_out', library.source);
+    const content = await readFile(snapshotPath, 'utf8');
+    assert.equal(library.source, `web-source-${createHash('sha256').update(content).digest('hex').slice(0, 16)}.json`);
+    const oldTime = new Date(Date.now() - 60000);
+    await utimes(snapshotPath, oldTime, oldTime);
+    const before = (await stat(snapshotPath)).mtimeMs;
+    const again = await (await post('/api/kb/library', JSON.parse(content))).json();
+    assert.equal(again.source, library.source);
+    assert.equal((await stat(snapshotPath)).mtimeMs, before);
+    assert.equal((await readdir(path.join(dir, 'kb_out'))).filter(name => name.startsWith('web-source-')).length, 1);
+    const different = await (await post('/api/kb/library', { library: [{ id: 'other' }] })).json();
+    assert.notEqual(different.source, library.source);
+    assert.equal((await readdir(path.join(dir, 'kb_out'))).filter(name => name.startsWith('web-source-')).length, 2);
+    for (const source of ['web-source-1234.json', 'web-source-0123456789abcdef0.json', 'web-source-01234567-89ab-cdef.json', 'web-source-ABCDEF0123456789.json', '../' + library.source, 'reading.json']) {
+      await writeFile(path.join(dir, 'kb_out', path.basename(source)), '{}');
+      const rejected = await post('/api/kb/generate', { id: 'article', source });
+      assert.equal(rejected.status, 400);
+      assert.equal((await rejected.json()).error, 'Invalid snapshot');
+    }
     const started = await post('/api/kb/generate', { id: 'article', source: library.source, vertical: true, lang: 'ja' });
     assert.equal(started.status, 202);
     const { id } = await started.json();
@@ -67,4 +88,26 @@ test('HTTP offline library, generation, preview ranges and traversal', async () 
     assert.equal((await fetch(base + '/api/kb/jobs/missing')).status, 404);
     assert.equal((await post('/api/kb/generate', { id: 'x', lang: 'bad' })).status, 400);
   } finally { await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('startup cleanup removes only snapshot files older than seven days', async () => {
+  const { createKbHandler } = await import('../kb_web.js');
+  const dir = await mkdtemp(path.join(tmpdir(), 'kb-cleanup-'));
+  const out = path.join(dir, 'kb_out');
+  try {
+    await mkdir(out);
+    const stale = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const recent = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+    for (const name of ['web-source-0123456789abcdef.json', 'web-source-old-uuid.json', 'reading.json', 'web_state.json', 'web-source-old.txt', 'prefix-web-source-old.json']) {
+      await writeFile(path.join(out, name), '{}');
+      await utimes(path.join(out, name), stale, stale);
+    }
+    await writeFile(path.join(out, 'web-source-recent.json'), '{}');
+    await utimes(path.join(out, 'web-source-recent.json'), recent, recent);
+    await mkdir(path.join(out, 'web-source-directory.json'));
+    await utimes(path.join(out, 'web-source-directory.json'), stale, stale);
+    const handler = createKbHandler({ workDir: dir });
+    await handler({ url: '/api/kb/jobs/missing', method: 'GET' }, { writeHead() {}, end() {} });
+    assert.deepEqual((await readdir(out)).sort(), ['prefix-web-source-old.json', 'reading.json', 'web-source-directory.json', 'web-source-old.txt', 'web-source-recent.json', 'web_state.json'].sort());
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

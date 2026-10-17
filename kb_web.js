@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile, realpath, stat } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile, realpath, stat, readdir, lstat, unlink } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 
@@ -29,6 +29,18 @@ export function createJobs() {
 export function createKbHandler({ workDir, cliRoot = workDir, python = process.env.NPOCUT_PYTHON || 'python3', env = process.env }) {
   const out = path.join(workDir, 'kb_out');
   const jobs = createJobs();
+  const cleanup = (async () => {
+    await mkdir(out, { recursive: true });
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const name of await readdir(out)) {
+      if (!/^web-source-.*\.json$/.test(name)) continue;
+      const file = path.join(out, name);
+      try {
+        const info = await lstat(file);
+        if (info.isFile() && info.mtimeMs < cutoff) await unlink(file);
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+  })().catch(error => { console.warn(`Could not clean KB snapshots: ${error.message}`); });
   let saving = Promise.resolve();
   const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
   async function body(req) {
@@ -46,6 +58,7 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
     const url = new URL(req.url, 'http://localhost');
     if (!url.pathname.startsWith('/api/kb/')) return false;
     try {
+      await cleanup;
       if (url.pathname === '/api/kb/file' && ['GET', 'HEAD'].includes(req.method)) {
         let file;
         try { file = await safeKbFile(out, url.searchParams.get('path')); } catch { json(res, 403, { error: 'Forbidden path' }); return true; }
@@ -74,8 +87,10 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
           state = { ...state, ...webState };
         } catch (e) { if (e.code !== 'ENOENT') throw e; }
         await mkdir(out, { recursive: true });
-        const snapshot = `web-source-${randomUUID()}.json`;
-        await writeFile(path.join(out, snapshot), JSON.stringify({ library: items }));
+        const content = JSON.stringify({ library: items });
+        const snapshot = `web-source-${createHash('sha256').update(content).digest('hex').slice(0, 16)}.json`;
+        try { await writeFile(path.join(out, snapshot), content, { flag: 'wx' }); }
+        catch (error) { if (error.code !== 'EEXIST') throw error; }
         json(res, 200, { source: snapshot, library: items.map(item => ({ id: String(item.id), title: item.title, kind: item.kind, summary: item.summary, key_points_count: Array.isArray(item.key_points) ? item.key_points.length : 0, autogen: state[String(item.id)] || null })) });
       } else if (url.pathname === '/api/kb/generate' && req.method === 'POST') {
         const data = await body(req);
@@ -83,7 +98,7 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
         if (data.id.startsWith('-')) throw new Error('Invalid item id');
         const args = [path.join(cliRoot, 'kb_video.py'), data.id, '--out', out];
         if (data.source) {
-          if (!/^web-source-[a-f0-9-]+\.json$/.test(data.source)) throw new Error('Invalid snapshot');
+          if (!/^web-source-[a-f0-9]{16}\.json$/.test(data.source)) throw new Error('Invalid snapshot');
           args.push('--from-json', await safeKbFile(out, data.source));
         } else if (process.env.ONTOKB_FROM_JSON) args.push('--from-json', process.env.ONTOKB_FROM_JSON);
         else args.push('--base-url', process.env.ONTOKB_URL || 'http://127.0.0.1:8765');

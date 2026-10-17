@@ -453,6 +453,7 @@ python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,
 点击 **From OntoKB** 查看知识库摘要、要点数量与生成状态，选择语言和可选的
 macOS 声音后点击「生成横屏」或「生成竖屏」。面板显示运行日志、视频预览及下载链接。
 输出与生成记录保存在已忽略的 `kb_out/`，Electron 保存到 Documents/npocut/kb_out。
+相同知识库复用内容哈希命名的快照；服务启动时清理超过 7 天的 `web-source-*.json` 快照。
 
 `ONTOKB_URL` 指定知识库地址（默认 `http://127.0.0.1:8765`）。离线时可在面板
 导入保存的 reading JSON，或执行

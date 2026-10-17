@@ -1249,6 +1249,7 @@ Open **From OntoKB** to browse summaries and key-point counts, then choose
 **生成横屏** (landscape) or **生成竖屏** (vertical). Select a language and optionally
 enter a macOS voice. Jobs show their log, video preview and download link.
 Outputs and saved generation status stay under ignored `kb_out/`.
+Identical libraries reuse a content-hashed snapshot; server startup removes `web-source-*.json` snapshots older than 7 days.
 
 The server uses `ONTOKB_URL` (default `http://127.0.0.1:8765`). For offline use,
 import a saved reading JSON in the panel, or start with
