@@ -1,3 +1,4 @@
+import { createKbHandler } from './kb_web.js';
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
@@ -120,8 +121,10 @@ function openTerminal(command) {
   child.unref();
 }
 
-function createAppServer() {
+export function createAppServer(options = {}) {
+  const kb = createKbHandler({ workDir: __dirname, ...options });
   return createServer(async (req, res) => {
+  if (await kb(req, res)) return;
   if (req.method === "POST" && req.url === "/api/advanced-cut") {
     sendJson(res, 410, {
       error: "Advanced Cut now marks subtitle rows and exports a reversed keep plan: cut_plan_new.csv.",
@@ -242,4 +245,4 @@ function listen(candidatePort) {
   });
 }
 
-listen(port);
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) listen(port);

@@ -1242,3 +1242,19 @@ for sizing and split long narration into at most two lines per cue. Batch output
 use `kb_out/<slug>/<format>/`, adding a hash suffix only for slug collisions.
 The gallery groups formats under each item with a landscape preview. Older batch
 state regenerates automatically on its next eligible run (subject to `--limit`).
+
+### From OntoKB (Web / Electron)
+
+Open **From OntoKB** to browse summaries and key-point counts, then choose
+**生成横屏** (landscape) or **生成竖屏** (vertical). Select a language and optionally
+enter a macOS voice. Jobs show their log, video preview and download link.
+Outputs and saved generation status stay under ignored `kb_out/`.
+
+The server uses `ONTOKB_URL` (default `http://127.0.0.1:8765`). For offline use,
+import a saved reading JSON in the panel, or start with
+`ONTOKB_FROM_JSON=tests/fixtures/ontokb_reading.json npm run dev`.
+`NPOCUT_PYTHON` selects the server's Python executable (Python 3.10+ with Pillow).
+Electron uses its existing Python discovery and stores outputs in Documents/npocut/kb_out.
+Running jobs survive panel reloads while the server remains running; a server restart
+ends job tracking, while completed output status remains available.
+Run API/security tests with `npm run test:kb`.

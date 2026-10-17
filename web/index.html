@@ -21,6 +21,7 @@
           </div>
         </div>
         <div class="top-actions">
+          <button id="kbToggle" type="button" aria-expanded="false" aria-controls="kbPanel">From OntoKB</button>
           <label class="file-button">
             <input id="videoInput" type="file" accept="video/*" />
             <span>Load Video</span>
@@ -36,6 +37,17 @@
         </div>
       </header>
 
+      <section id="kbPanel" class="kb-panel" hidden aria-label="From OntoKB">
+        <div class="kb-toolbar">
+          <h2>From OntoKB</h2>
+          <button id="kbRefresh" type="button">刷新知识库</button>
+          <label class="file-button secondary"><input id="kbJson" type="file" accept=".json,application/json" /><span>导入 JSON</span></label>
+          <label>语言 <select id="kbLang"><option value="zh">中文</option><option value="ja">日本語</option><option value="en">English</option></select></label>
+          <label>声音 <input id="kbVoice" placeholder="系统默认" maxlength="200" /></label>
+        </div>
+        <p id="kbMessage" role="status"></p>
+        <div id="kbLibrary" class="kb-library"></div>
+      </section>
       <section class="workspace">
         <section class="media-panel">
           <div id="videoShell" class="video-shell">
@@ -174,5 +186,6 @@
     </main>
 
     <script src="./app.js" type="module"></script>
+    <script src="./kb.js" type="module"></script>
   </body>
 </html>

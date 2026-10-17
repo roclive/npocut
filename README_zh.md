@@ -447,3 +447,16 @@ python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,
 指定解释器）。字幕按短边计算字号，每条最多两行。批量输出使用
 `kb_out/<slug>/<format>/`，仅在 slug 冲突时追加哈希；画廊按条目分组并预览横版。
 旧状态会在下次符合生成条件时自动重生成，受 `--limit` 限制。
+
+### From OntoKB（Web / Electron）
+
+点击 **From OntoKB** 查看知识库摘要、要点数量与生成状态，选择语言和可选的
+macOS 声音后点击「生成横屏」或「生成竖屏」。面板显示运行日志、视频预览及下载链接。
+输出与生成记录保存在已忽略的 `kb_out/`，Electron 保存到 Documents/npocut/kb_out。
+
+`ONTOKB_URL` 指定知识库地址（默认 `http://127.0.0.1:8765`）。离线时可在面板
+导入保存的 reading JSON，或执行
+`ONTOKB_FROM_JSON=tests/fixtures/ontokb_reading.json npm run dev`。
+Web 服务可用 `NPOCUT_PYTHON` 指定安装了 Pillow 的 Python 3.10+。
+服务运行期间刷新面板可恢复任务跟踪；服务重启后只保留已完成的生成记录。
+接口与安全测试：`npm run test:kb`。

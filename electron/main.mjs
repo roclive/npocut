@@ -1,3 +1,4 @@
+import { createAppServer } from '../server.js';
 import { app, BrowserWindow, clipboard, ipcMain, session, shell } from "electron";
 import { spawn } from "node:child_process";
 import { constants, existsSync, mkdirSync, statSync, accessSync } from "node:fs";
@@ -977,7 +978,7 @@ function configureNavigation(win) {
     console.error(`[npocut] preload failed: ${preloadPath}`, error);
   });
   win.webContents.on("will-navigate", (event, url) => {
-    if (isAppUrl(url)) return;
+    if (isAppUrl(url) || new URL(url).origin === new URL(win.webContents.getURL()).origin) return;
     event.preventDefault();
     openExternalHttp(url);
   });
@@ -1013,7 +1014,11 @@ async function createWindow() {
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });
-  await win.loadFile(path.join(getWebRoot(), "index.html"));
+  mkdirSync(defaultWorkDir(), { recursive: true });
+  const server = createAppServer({ workDir: defaultWorkDir(), cliRoot: getCliRoot(), python: pythonCommand(getCliRoot()), env: taskEnv(ffmpegBundleInfo()) });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  win.on("closed", () => server.close());
+  await win.loadURL(`http://127.0.0.1:${server.address().port}/`);
 }
 
 registerIpcHandlers();
