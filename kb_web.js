@@ -42,6 +42,30 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
     }
   })().catch(error => { console.warn(`Could not clean KB snapshots: ${error.message}`); });
   let saving = Promise.resolve();
+  const voiceCache = new Map();
+  async function voices(lang) {
+    if (!['zh', 'ja', 'en'].includes(lang)) throw new Error('Invalid language');
+    const cached = voiceCache.get(lang);
+    if (cached && Date.now() - cached.time < 600000) return cached.value;
+    const value = await new Promise((resolve, reject) => {
+      const child = spawn(python, [path.join(cliRoot, 'kb_voices.py'), '--lang', lang], { cwd: workDir, env });
+      let output = '';
+      const timer = setTimeout(() => { child.kill(); reject(new Error('Voice listing timed out')); }, 20000);
+      child.stdout.on('data', chunk => { output += chunk; });
+      child.once('error', error => { clearTimeout(timer); reject(error); });
+      child.once('close', code => {
+        clearTimeout(timer);
+        try {
+          if (code !== 0) throw new Error('Could not list voices');
+          const result = JSON.parse(output);
+          if (!Array.isArray(result.edge) || !Array.isArray(result.say) || !result.defaults) throw new Error('Invalid voice listing');
+          resolve(result);
+        } catch (error) { reject(error); }
+      });
+    });
+    voiceCache.set(lang, { time: Date.now(), value });
+    return value;
+  }
   const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
   async function body(req) {
     let text = '';
@@ -59,7 +83,9 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
     if (!url.pathname.startsWith('/api/kb/')) return false;
     try {
       await cleanup;
-      if (url.pathname === '/api/kb/file' && ['GET', 'HEAD'].includes(req.method)) {
+      if (url.pathname === '/api/kb/voices' && req.method === 'GET') {
+        json(res, 200, await voices(url.searchParams.get('lang') ?? 'zh'));
+      } else if (url.pathname === '/api/kb/file' && ['GET', 'HEAD'].includes(req.method)) {
         let file;
         try { file = await safeKbFile(out, url.searchParams.get('path')); } catch { json(res, 403, { error: 'Forbidden path' }); return true; }
         const info = await stat(file);
@@ -94,7 +120,9 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
         json(res, 200, { source: snapshot, library: items.map(item => ({ id: String(item.id), title: item.title, kind: item.kind, summary: item.summary, key_points_count: Array.isArray(item.key_points) ? item.key_points.length : 0, autogen: state[String(item.id)] || null })) });
       } else if (url.pathname === '/api/kb/generate' && req.method === 'POST') {
         const data = await body(req);
-        if (typeof data.id !== 'string' || !data.id || (data.vertical !== undefined && typeof data.vertical !== 'boolean') || (data.lang && !['zh', 'ja', 'en'].includes(data.lang)) || (data.voice !== undefined && (typeof data.voice !== 'string' || data.voice.length > 200))) throw new Error('Invalid generation options');
+        if (typeof data.id !== 'string' || !data.id || (data.vertical !== undefined && typeof data.vertical !== 'boolean') || (data.lang !== undefined && !['zh', 'ja', 'en'].includes(data.lang)) || (data.voice !== undefined && (typeof data.voice !== 'string' || data.voice.length > 200))) throw new Error('Invalid generation options');
+        const tts = data.tts === undefined ? 'auto' : data.tts;
+        if (!['auto', 'edge', 'say'].includes(tts)) throw new Error('Invalid TTS backend');
         if (data.id.startsWith('-')) throw new Error('Invalid item id');
         const args = [path.join(cliRoot, 'kb_video.py'), data.id, '--out', out];
         if (data.source) {
@@ -102,22 +130,33 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
           args.push('--from-json', await safeKbFile(out, data.source));
         } else if (process.env.ONTOKB_FROM_JSON) args.push('--from-json', process.env.ONTOKB_FROM_JSON);
         else args.push('--base-url', process.env.ONTOKB_URL || 'http://127.0.0.1:8765');
+        const catalog = await voices(data.lang || 'zh');
+        const backend = tts === 'auto' ? 'edge' : tts;
+        const voice = data.voice === undefined ? catalog.defaults[backend] : data.voice;
+        if (!catalog[backend].some(item => item.name === voice)) throw new Error('Invalid voice for backend and language');
+        args.push('--tts', tts, '--voice', voice);
         if (data.vertical) args.push('--vertical');
-        if (data.voice) args.push('--voice', data.voice);
         if (data.lang) args.push('--lang', data.lang);
         const child = spawn(python, args, { cwd: workDir, env: { ...env, PYTHONUNBUFFERED: '1' } });
         const job = jobs.start(child, { itemId: data.id, vertical: !!data.vertical });
-        child.once('close', () => {
+        child.once('close', async () => {
           if (job.status === 'done') {
             const final = job.log.trim().split(/\r?\n/).at(-1);
             const relative = path.relative(out, final || '');
             if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+              job.status = 'running';
+              try {
+                const manifestPath = await safeKbFile(out, path.join(path.dirname(relative), 'manifest.json'));
+                const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+                for (const key of ['tts_backend', 'voice', 'fallback_reason']) job[key] = manifest[key] ?? null;
+              } catch (error) { job.log += `\nCould not read narration manifest: ${error.message}`; }
               job.outputs = [relative];
+              job.status = 'done';
               saving = saving.then(async () => {
                 let state = {};
                 try { state = JSON.parse(await readFile(path.join(out, 'web_state.json'), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
                 const old = state[data.id]?.outputs || [];
-                state[data.id] = { status: 'done', outputs: [...new Set([...old, relative])] };
+                state[data.id] = { status: 'done', outputs: [...new Set([...old, relative])], tts_backend: job.tts_backend, voice: job.voice, fallback_reason: job.fallback_reason };
                 await writeFile(path.join(out, 'web_state.json'), JSON.stringify(state));
               }).catch(error => { job.log += `\nCould not save status: ${error.message}`; });
             }

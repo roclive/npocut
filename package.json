@@ -180,6 +180,10 @@
       {
         "from": "kb_source.py",
         "to": "npocut-cli/kb_source.py"
+      },
+      {
+        "from": "kb_voices.py",
+        "to": "npocut-cli/kb_voices.py"
       }
     ],
     "mac": {

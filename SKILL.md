@@ -420,7 +420,7 @@ and voice, without translating source text; unsupported glyphs may show tofu.
 ## From OntoKB panel
 
 Web and Electron expose **From OntoKB**: refresh the live library or import a
-saved reading JSON, select language/voice, and generate landscape or vertical
+saved reading JSON, select language, narration backend (Auto/Edge/macOS) and voice (Chinese defaults to Yunyang; remembered per language), and generate landscape or vertical
 narrated videos with logs, preview and download. Set `ONTOKB_URL` for another
 API, `ONTOKB_FROM_JSON` for a server-side offline snapshot, and `NPOCUT_PYTHON`
 for the Web server Python. Imported JSON is snapshotted under ignored `kb_out/`

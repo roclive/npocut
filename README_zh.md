@@ -450,8 +450,8 @@ python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,
 
 ### From OntoKB（Web / Electron）
 
-点击 **From OntoKB** 查看知识库摘要、要点数量与生成状态，选择语言和可选的
-macOS 声音后点击「生成横屏」或「生成竖屏」。面板显示运行日志、视频预览及下载链接。
+点击 **From OntoKB** 查看知识库摘要、要点数量与生成状态，选择语言、
+配音后端（自动 / Edge / 本机 macOS）及声音下拉选项后点击「生成横屏」或「生成竖屏」。中文默认云扬，按语言记住选择；完成后显示实际后端、声音和回退原因，以及运行日志、视频预览及下载链接。
 输出与生成记录保存在已忽略的 `kb_out/`，Electron 保存到 Documents/npocut/kb_out。
 相同知识库复用内容哈希命名的快照；服务启动时清理超过 7 天的 `web-source-*.json` 快照。
 

@@ -23,6 +23,7 @@ from common import FFMPEG, Cue, concat_file_line, probe_duration, write_srt
 from kb_source import DEFAULT_BASE_URL, build_script, fetch_library, load_library, slugify
 
 PAD = 0.4
+SAY_DEFAULT_VOICE = 'Tingting'
 
 
 def ffmpeg(*args: object, cwd: Path | None = None) -> None:
@@ -44,7 +45,7 @@ def choose_voice(lang: str, override: str | None = None) -> str:
             voices.append(match[1].strip())
     if not voices:
         raise ValueError(f'No installed {locale} voice; install one or pass --voice')
-    return 'Tingting' if lang == 'zh' and 'Tingting' in voices else voices[0]
+    return SAY_DEFAULT_VOICE if lang == 'zh' and SAY_DEFAULT_VOICE in voices else voices[0]
 
 
 def speech_weight(text: str) -> float:

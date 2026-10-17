@@ -34,7 +34,12 @@ test('HTTP offline library, generation, preview ranges and traversal', async () 
   const dir = await mkdtemp(path.join(tmpdir(), 'kb-api-'));
   const server = createAppServer({ workDir: dir, cliRoot: dir, python: process.env.NPOCUT_PYTHON || 'python3' });
   try {
-    await writeFile(path.join(dir, 'kb_video.py'), `import pathlib,sys\nout=pathlib.Path(sys.argv[sys.argv.index('--out')+1])\np=out/'result.mp4'\np.write_bytes(b'0123456789')\nprint(p)\n`);
+    await writeFile(path.join(dir, 'kb_voices.py'), `import json, pathlib, sys
+p=pathlib.Path('voice_calls.txt')
+p.write_text(p.read_text()+'x' if p.exists() else 'x')
+print(json.dumps({'edge':[{'name':'ja-JP-KeitaNeural','label':'Keita','gender':'Male'}], 'say':[{'name':'Kyoko','label':'Kyoko'}], 'defaults':{'edge':'ja-JP-KeitaNeural','say':'Kyoko'}}))
+`);
+    await writeFile(path.join(dir, 'kb_video.py'), `import pathlib,sys\nout=pathlib.Path(sys.argv[sys.argv.index('--out')+1])\np=out/'result.mp4'\np.write_bytes(b'0123456789')\n(out/'args.json').write_text(__import__('json').dumps(sys.argv))\n(out/'manifest.json').write_text(__import__('json').dumps({'tts_backend':'say','voice':'Kyoko','fallback_reason':'offline'}))\nprint(p)\n`);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
     const post = (url, value) => fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
@@ -60,6 +65,14 @@ test('HTTP offline library, generation, preview ranges and traversal', async () 
       assert.equal(rejected.status, 400);
       assert.equal((await rejected.json()).error, 'Invalid snapshot');
     }
+    for (const invalid of [{tts:'invalid'}, {tts:null}, {tts:'auto',voice:'Tingting'}, {tts:'say',voice:'ja-JP-KeitaNeural'}, {voice:''}]) {
+      assert.equal((await post('/api/kb/generate', {id:'article', lang:'ja', ...invalid})).status, 400);
+    }
+    assert.equal((await fetch(base + '/api/kb/voices?lang=bad')).status, 400);
+    const catalog = await (await fetch(base + '/api/kb/voices?lang=ja')).json();
+    assert.equal(catalog.edge[0].name, 'ja-JP-KeitaNeural');
+    await fetch(base + '/api/kb/voices?lang=ja');
+    assert.equal(await readFile(path.join(dir, 'voice_calls.txt'), 'utf8'), 'x');
     const started = await post('/api/kb/generate', { id: 'article', source: library.source, vertical: true, lang: 'ja' });
     assert.equal(started.status, 202);
     const { id } = await started.json();
@@ -70,6 +83,25 @@ test('HTTP offline library, generation, preview ranges and traversal', async () 
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.equal(job.status, 'done'); assert.deepEqual(job.outputs, ['result.mp4']);
+    assert.equal(job.tts_backend, 'say');
+    assert.equal(job.voice, 'Kyoko');
+    assert.equal(job.fallback_reason, 'offline');
+    const args = JSON.parse(await readFile(path.join(dir, 'kb_out/args.json'), 'utf8'));
+    assert.equal(args[args.indexOf('--tts') + 1], 'auto');
+    assert.equal(args[args.indexOf('--voice') + 1], 'ja-JP-KeitaNeural');
+    for (const [tts, voice] of [['edge', 'ja-JP-KeitaNeural'], ['say', 'Kyoko']]) {
+      const response = await post('/api/kb/generate', {id:'article', source:library.source, lang:'ja', tts, voice});
+      assert.equal(response.status, 202);
+      const next = await response.json();
+      for (let n = 0; n < 100; n++) {
+        const current = await (await fetch(`${base}/api/kb/jobs/${next.id}`)).json();
+        if (current.status !== 'running') { assert.equal(current.status, 'done'); break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      const passed = JSON.parse(await readFile(path.join(dir, 'kb_out/args.json'), 'utf8'));
+      assert.equal(passed[passed.indexOf('--tts') + 1], tts);
+      assert.equal(passed[passed.indexOf('--voice') + 1], voice);
+    }
     const head = await fetch(base + '/api/kb/file?path=result.mp4', { method: 'HEAD' });
     assert.equal(head.headers.get('content-length'), '10'); assert.equal(await head.text(), '');
     let saved;

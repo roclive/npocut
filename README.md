@@ -1246,8 +1246,8 @@ state regenerates automatically on its next eligible run (subject to `--limit`).
 ### From OntoKB (Web / Electron)
 
 Open **From OntoKB** to browse summaries and key-point counts, then choose
-**生成横屏** (landscape) or **生成竖屏** (vertical). Select a language and optionally
-enter a macOS voice. Jobs show their log, video preview and download link.
+**生成横屏** (landscape) or **生成竖屏** (vertical). Select a language,
+choose Auto (Edge with local fallback), Edge, or macOS narration and a voice dropdown. Chinese defaults to Edge Yunyang; selections are remembered per language. Completed jobs show the actual backend/voice and fallback reason, plus logs, preview and download.
 Outputs and saved generation status stay under ignored `kb_out/`.
 Identical libraries reuse a content-hashed snapshot; server startup removes `web-source-*.json` snapshots older than 7 days.
 
