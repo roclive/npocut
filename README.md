@@ -1193,3 +1193,22 @@ at most two 120-character segments, preferring sentence boundaries; oversized
 sentences are split and excess content is omitted. Narration removes Markdown
 and URLs, while the outro displays the source URL. Generated outputs belong in
 ignored `kb_out/`. This command builds scripts only; it does not render videos.
+
+### Narrated OntoKB videos
+
+Render an article's summary and key points as narrated slides with burned subtitles:
+
+```bash
+python3 kb_video.py ITEM_ID --from-json tests/fixtures/ontokb_reading.json
+python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang ja
+```
+
+Outputs in `kb_out/<slug>/`: `video.mp4`, `<slug>.subbed.mp4`, `subs.srt`, and
+`manifest.json` (script, measured segment durations including 0.4 s pauses, voice,
+files, and creation time). `--no-burn` returns the unburned video. Use `--size WxH`,
+`--voice`, `--lang zh|ja|en`, `--max-points`, and `--out` to customize. Vertical mode
+swaps landscape dimensions (default 1080x1920). `--script` works without OntoKB;
+otherwise use `--from-json` offline or `--base-url http://127.0.0.1:8765` online.
+Language selects voice/labels, not translation. macOS `say` supplies offline TTS;
+`NPOCUT_FAKE_TTS=1` generates silence for testing. Override tools/fonts with
+`NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`, and `NPOCUT_FONT`.

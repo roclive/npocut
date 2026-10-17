@@ -407,3 +407,19 @@ python3 kb_source.py script <id> --from-json kb_out/reading.json -o kb_out/scrip
 最多两段，每段最多 120 字；超长单句按长度切分，超出两段的内容省略。
 旁白移除 Markdown 和 URL，结束画面保留来源链接。生成文件放在已忽略的
 `kb_out/` 下。此命令仅生成脚本，不渲染视频。
+
+### OntoKB 配音视频
+
+```bash
+python3 kb_video.py ITEM_ID --from-json tests/fixtures/ontokb_reading.json
+python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang ja
+```
+
+将摘要和要点制作成配音幻灯片，默认烧录字幕。结果保存在 `kb_out/<slug>/`：
+`video.mp4`、`<slug>.subbed.mp4`、`subs.srt`、`manifest.json`（脚本、含每段
+0.4 秒停顿的时长、声音、文件及创建时间）。`--no-burn` 跳过烧录；支持
+`--size WxH`、`--voice`、`--lang zh|ja|en`、`--max-points`、`--out`。
+`--vertical` 将横向尺寸交换为竖向，默认 1080x1920。`--script` 或 `--from-json`
+可离线使用，也可通过 `--base-url` 连接 OntoKB。语言参数选择声音和标签，不翻译正文。
+配音使用 macOS `say`；测试可设 `NPOCUT_FAKE_TTS=1` 生成静音。
+工具和字体可通过 `NPOCUT_FFMPEG`、`NPOCUT_FFPROBE`、`NPOCUT_FONT` 覆盖。

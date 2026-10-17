@@ -383,3 +383,13 @@ up to two 120-character segments at sentence boundaries with hard splitting for
 long sentences and truncation beyond the budget. Narration strips Markdown and
 URLs. Default script output is `kb_out/<slug>.script.json`; keep generated files
 under ignored `kb_out/`. This step produces JSON, not rendered media.
+
+## OntoKB narrated slides
+
+Use `python3 kb_video.py ITEM_ID --from-json snapshot.json` to render summary/key-point
+slides with macOS offline TTS and burned sentence subtitles. `--script script.json`
+bypasses OntoKB completely; `--base-url` fetches live items. `--vertical`, `--size WxH`,
+`--voice`, `--lang zh|ja|en`, `--max-points`, `--out`, and `--no-burn` customize output.
+Final videos, SRT and the manifest live in ignored `kb_out/<slug>/`; intermediates
+are temporary. `NPOCUT_FAKE_TTS=1` enables offline silent test renders. Font and
+ffmpeg overrides use `NPOCUT_FONT`, `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`.
