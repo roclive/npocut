@@ -38,3 +38,6 @@ shorts_out/
 *.log
 tmp/
 temp/
+
+# OntoKB generated scripts and media
+kb_out/

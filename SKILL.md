@@ -364,3 +364,22 @@ Legacy local SRT-only wrapper. Prefer `generate_srt.py`.
   explicitly requested.
 - When generating a new cut based on subtitles, always produce or update the
   relevant plan file first, then run the video/SRT command from that plan.
+
+## OntoKB Script Builder
+
+Use `kb_source.py` for summary-driven narration scripts from any OntoKB item,
+including articles without source video. Work in the current checkout.
+
+```bash
+python3 kb_source.py snapshot -o kb_out/reading.json
+python3 kb_source.py list --from-json kb_out/reading.json
+python3 kb_source.py script <id> --from-json kb_out/reading.json -o kb_out/script.json
+```
+
+Omit `--from-json` to use the live API; `--base-url` and `--timeout` configure it.
+Offline input accepts a full reading payload or bare library list. Script options:
+`--max-points 6`, `--lang zh|ja|en` (labels only, no translation). Summaries retain
+up to two 120-character segments at sentence boundaries with hard splitting for
+long sentences and truncation beyond the budget. Narration strips Markdown and
+URLs. Default script output is `kb_out/<slug>.script.json`; keep generated files
+under ignored `kb_out/`. This step produces JSON, not rendered media.

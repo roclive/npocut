@@ -1171,3 +1171,25 @@ short_01.mp4,00:03:20.000,00:03:42.000,follow up
 - `examples/clip_plan.csv`
 - `examples/remove_ranges.txt`
 - `examples/shorts_plan.csv`
+
+## OntoKB narration scripts
+
+`kb_source.py` builds JSON video scripts from article or YouTube items using
+`summary` and `key_points`; source video is not required. It uses only the
+Python standard library. Save a snapshot for offline use:
+
+```bash
+python3 kb_source.py snapshot -o kb_out/reading.json
+python3 kb_source.py list --from-json kb_out/reading.json
+python3 kb_source.py script <id> --from-json kb_out/reading.json -o kb_out/script.json
+```
+
+Without `--from-json`, list/script read `http://127.0.0.1:8765/api/reading`
+(`--base-url` and `--timeout` override the endpoint and 30-second timeout).
+Saved input may be the full payload or a bare library list. Script output defaults
+to `kb_out/<slug>.script.json`. `--max-points` defaults to 6; `--lang zh|ja|en`
+selects labels and the outro, without translating source content. Summaries keep
+at most two 120-character segments, preferring sentence boundaries; oversized
+sentences are split and excess content is omitted. Narration removes Markdown
+and URLs, while the outro displays the source URL. Generated outputs belong in
+ignored `kb_out/`. This command builds scripts only; it does not render videos.

@@ -388,3 +388,22 @@ short_01.mp4,00:03:20.000,00:03:42.000,follow up
 - `examples/clip_plan.csv`
 - `examples/remove_ranges.txt`
 - `examples/shorts_plan.csv`
+
+## OntoKB 旁白脚本
+
+`kb_source.py` 使用文章或 YouTube 条目的 `summary` 和 `key_points` 生成
+JSON 视频脚本，无需源视频，仅依赖 Python 标准库。
+
+```bash
+python3 kb_source.py snapshot -o kb_out/reading.json
+python3 kb_source.py list --from-json kb_out/reading.json
+python3 kb_source.py script <id> --from-json kb_out/reading.json -o kb_out/script.json
+```
+
+不加 `--from-json` 时读取本地 `http://127.0.0.1:8765/api/reading`，可用
+`--base-url`、`--timeout` 调整地址和默认 30 秒超时。离线 JSON 支持完整响应或
+条目列表。脚本默认保存到 `kb_out/<slug>.script.json`，`--max-points` 默认 6，
+`--lang zh|ja|en` 选择标签及结束语，不翻译原文。摘要优先按句末标点拆分，
+最多两段，每段最多 120 字；超长单句按长度切分，超出两段的内容省略。
+旁白移除 Markdown 和 URL，结束画面保留来源链接。生成文件放在已忽略的
+`kb_out/` 下。此命令仅生成脚本，不渲染视频。

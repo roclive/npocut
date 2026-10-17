@@ -1,0 +1,646 @@
+{
+  "nodes": [
+    {
+      "id": "AI 技能培养",
+      "entity_id": 7,
+      "type": "DefinedTerm",
+      "ontologyUri": "https://schema.org/DefinedTerm",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "Anthropic",
+      "entity_id": 1,
+      "type": "Organization",
+      "ontologyUri": "https://schema.org/Organization",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "Anthropic 希望树立 AI 技能培养的黄金标准",
+      "entity_id": 18,
+      "type": "Claim",
+      "ontologyUri": "https://schema.org/Claim",
+      "reviewStatus": "",
+      "verificationStatus": "unverified"
+    },
+    {
+      "id": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+      "entity_id": 14,
+      "type": "Claim",
+      "ontologyUri": "https://schema.org/Claim",
+      "reviewStatus": "",
+      "verificationStatus": "unverified"
+    },
+    {
+      "id": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "entity_id": 19,
+      "type": "Article",
+      "ontologyUri": "https://schema.org/Article",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "Claude",
+      "entity_id": 2,
+      "type": "SoftwareApplication",
+      "ontologyUri": "https://schema.org/SoftwareApplication",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "Palantir",
+      "entity_id": 13,
+      "type": "Organization",
+      "ontologyUri": "https://schema.org/Organization",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "企业 AI 落地的障碍是技能缺口而非意愿不足",
+      "entity_id": 17,
+      "type": "Claim",
+      "ontologyUri": "https://schema.org/Claim",
+      "reviewStatus": "",
+      "verificationStatus": "unverified"
+    },
+    {
+      "id": "企业 AI 部署",
+      "entity_id": 8,
+      "type": "DefinedTerm",
+      "ontologyUri": "https://schema.org/DefinedTerm",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "优秀前沿部署工程师需要智能体 AI 知识、问题解决能力、沟通能力及扎实工程经验",
+      "entity_id": 15,
+      "type": "Claim",
+      "ontologyUri": "https://schema.org/Claim",
+      "reviewStatus": "",
+      "verificationStatus": "unverified"
+    },
+    {
+      "id": "前沿部署工程师",
+      "entity_id": 5,
+      "type": "DefinedTerm",
+      "ontologyUri": "https://schema.org/DefinedTerm",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "前沿部署工程师必须拥有极强的好奇心",
+      "entity_id": 16,
+      "type": "Claim",
+      "ontologyUri": "https://schema.org/Claim",
+      "reviewStatus": "",
+      "verificationStatus": "unverified"
+    },
+    {
+      "id": "史蒂夫·科菲尔德",
+      "entity_id": 4,
+      "type": "Person",
+      "ontologyUri": "https://schema.org/Person",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "埃森哲",
+      "entity_id": 9,
+      "type": "Organization",
+      "ontologyUri": "https://schema.org/Organization",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "智能体 AI",
+      "entity_id": 6,
+      "type": "DefinedTerm",
+      "ontologyUri": "https://schema.org/DefinedTerm",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "诺和诺德",
+      "entity_id": 11,
+      "type": "Organization",
+      "ontologyUri": "https://schema.org/Organization",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "贝恩",
+      "entity_id": 10,
+      "type": "Organization",
+      "ontologyUri": "https://schema.org/Organization",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "赛富时",
+      "entity_id": 12,
+      "type": "Organization",
+      "ontologyUri": "https://schema.org/Organization",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    },
+    {
+      "id": "香巴维·香巴维",
+      "entity_id": 3,
+      "type": "Person",
+      "ontologyUri": "https://schema.org/Person",
+      "reviewStatus": "",
+      "verificationStatus": ""
+    }
+  ],
+  "edges": [
+    {
+      "s": "Anthropic",
+      "p": "makesClaim",
+      "t": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师"
+    },
+    {
+      "s": "Anthropic",
+      "p": "relatedTo",
+      "t": "赛富时"
+    },
+    {
+      "s": "Anthropic 希望树立 AI 技能培养的黄金标准",
+      "p": "about",
+      "t": "AI 技能培养"
+    },
+    {
+      "s": "Anthropic 希望树立 AI 技能培养的黄金标准",
+      "p": "about",
+      "t": "Anthropic"
+    },
+    {
+      "s": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+      "p": "about",
+      "t": "Anthropic"
+    },
+    {
+      "s": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+      "p": "about",
+      "t": "前沿部署工程师"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "about",
+      "t": "AI 技能培养"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "about",
+      "t": "Anthropic"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "about",
+      "t": "Claude"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "about",
+      "t": "企业 AI 部署"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "about",
+      "t": "前沿部署工程师"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "about",
+      "t": "智能体 AI"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "Anthropic 希望树立 AI 技能培养的黄金标准"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "Palantir"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "企业 AI 落地的障碍是技能缺口而非意愿不足"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "优秀前沿部署工程师需要智能体 AI 知识、问题解决能力、沟通能力及扎实工程经验"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "前沿部署工程师必须拥有极强的好奇心"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "史蒂夫·科菲尔德"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "埃森哲"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "诺和诺德"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "贝恩"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "赛富时"
+    },
+    {
+      "s": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "p": "mentions",
+      "t": "香巴维·香巴维"
+    },
+    {
+      "s": "企业 AI 落地的障碍是技能缺口而非意愿不足",
+      "p": "about",
+      "t": "Claude"
+    },
+    {
+      "s": "企业 AI 落地的障碍是技能缺口而非意愿不足",
+      "p": "about",
+      "t": "企业 AI 部署"
+    },
+    {
+      "s": "优秀前沿部署工程师需要智能体 AI 知识、问题解决能力、沟通能力及扎实工程经验",
+      "p": "about",
+      "t": "前沿部署工程师"
+    },
+    {
+      "s": "前沿部署工程师必须拥有极强的好奇心",
+      "p": "about",
+      "t": "前沿部署工程师"
+    },
+    {
+      "s": "史蒂夫·科菲尔德",
+      "p": "makesClaim",
+      "t": "Anthropic 希望树立 AI 技能培养的黄金标准"
+    },
+    {
+      "s": "史蒂夫·科菲尔德",
+      "p": "makesClaim",
+      "t": "企业 AI 落地的障碍是技能缺口而非意愿不足"
+    },
+    {
+      "s": "史蒂夫·科菲尔德",
+      "p": "makesClaim",
+      "t": "前沿部署工程师必须拥有极强的好奇心"
+    },
+    {
+      "s": "史蒂夫·科菲尔德",
+      "p": "worksFor",
+      "t": "Anthropic"
+    },
+    {
+      "s": "香巴维·香巴维",
+      "p": "makesClaim",
+      "t": "优秀前沿部署工程师需要智能体 AI 知识、问题解决能力、沟通能力及扎实工程经验"
+    },
+    {
+      "s": "香巴维·香巴维",
+      "p": "worksFor",
+      "t": "Anthropic"
+    }
+  ],
+  "library": [
+    {
+      "id": "article:0552d0796a761a267b95990a",
+      "title": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+      "kind": "article",
+      "source": "other",
+      "summary": "Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。Anthropic 主管香巴维·香巴维认为，优秀工程师需要熟悉智能体 AI、善于解决问题、具备出色沟通能力及扎实工程经验。另一位主管史蒂夫·科菲尔德补充强调了强烈好奇心的重要性。Anthropic 希望通过该项目及其他培训树立 AI 技能培养的“黄金标准”，科菲尔德认为企业部署面临的关键障碍是技能缺口，而非意愿不足。",
+      "categories": [
+        "AI类"
+      ],
+      "key_points": [
+        "Anthropic 将投入 1 亿美元培养前沿部署工程师，目标是到 2027 年底培养一万人。",
+        "培训采取四天线下实训与考核、随后 12 周企业内实践和导师指导的模式。",
+        "人才筛选强调智能体 AI 知识、问题解决能力、沟通能力、工程功底和好奇心。",
+        "企业提名候选人，Anthropic 负责面试，考核体系仍在完善。",
+        "首批学员包括来自埃森哲、贝恩和诺和诺德的工程师。",
+        "科菲尔德将企业 AI 落地障碍归因于技能缺口，项目意在帮助客户更高效地部署 Claude。"
+      ],
+      "steps": [
+        {
+          "text": "Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。",
+          "entities": [
+            "Anthropic",
+            "前沿部署工程师"
+          ],
+          "neighbors": [
+            "香巴维·香巴维",
+            "史蒂夫·科菲尔德",
+            "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+            "优秀前沿部署工程师需要智能体 AI 知识、问题解决能力、沟通能力及扎实工程经验",
+            "前沿部署工程师必须拥有极强的好奇心",
+            "Anthropic 希望树立 AI 技能培养的黄金标准",
+            "赛富时"
+          ],
+          "edges": [
+            {
+              "id": 1,
+              "s": "香巴维·香巴维",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "香巴维 · 香巴维（Shambhavi Shambhavi），Anthropic 负责合作伙伴市场战略与运营的主管",
+              "confidence": 1.0
+            },
+            {
+              "id": 2,
+              "s": "史蒂夫·科菲尔德",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "史蒂夫 · 科菲尔德（Steve Corfield），Anthropic 全球业务拓展与合作主管",
+              "confidence": 1.0
+            },
+            {
+              "id": 4,
+              "s": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+              "t": "Anthropic",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "这家人工智能公司本月早些时候宣布，将投入 1 亿美元",
+              "confidence": 1.0
+            },
+            {
+              "id": 5,
+              "s": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+              "t": "前沿部署工程师",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "设立前沿驻场工程师培养项目……Anthropic 将其命名为“前沿部署工程师（Frontier Deployed Engineers）”",
+              "confidence": 1.0
+            },
+            {
+              "id": 7,
+              "s": "优秀前沿部署工程师需要智能体 AI 知识、问题解决能力、沟通能力及扎实工程经验",
+              "t": "前沿部署工程师",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "优秀的前沿部署工程师具备四项核心特质",
+              "confidence": 1.0
+            },
+            {
+              "id": 9,
+              "s": "前沿部署工程师必须拥有极强的好奇心",
+              "t": "前沿部署工程师",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "Anthropic 高管认为前沿部署工程师需要保有好奇心",
+              "confidence": 0.99
+            },
+            {
+              "id": 14,
+              "s": "Anthropic 希望树立 AI 技能培养的黄金标准",
+              "t": "Anthropic",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "让 Anthropic 树立“AI 技能培养的黄金标准”",
+              "confidence": 1.0
+            },
+            {
+              "id": 16,
+              "s": "Anthropic",
+              "t": "赛富时",
+              "predicate": "relatedTo",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "Anthropic 的重要合作伙伴赛富时",
+              "confidence": 1.0
+            }
+          ]
+        },
+        {
+          "text": "项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。",
+          "entities": [
+            "Claude"
+          ],
+          "neighbors": [
+            "企业 AI 落地的障碍是技能缺口而非意愿不足"
+          ],
+          "edges": [
+            {
+              "id": 12,
+              "s": "企业 AI 落地的障碍是技能缺口而非意愿不足",
+              "t": "Claude",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "企业客户需要这类项目来探索更高效部署 Claude 的方法",
+              "confidence": 0.99
+            }
+          ]
+        },
+        {
+          "text": "首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。",
+          "entities": [
+            "埃森哲",
+            "贝恩",
+            "诺和诺德"
+          ],
+          "neighbors": [],
+          "edges": []
+        },
+        {
+          "text": "该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。",
+          "entities": [
+            "Claude",
+            "智能体 AI"
+          ],
+          "neighbors": [
+            "企业 AI 落地的障碍是技能缺口而非意愿不足"
+          ],
+          "edges": [
+            {
+              "id": 12,
+              "s": "企业 AI 落地的障碍是技能缺口而非意愿不足",
+              "t": "Claude",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "企业客户需要这类项目来探索更高效部署 Claude 的方法",
+              "confidence": 0.99
+            }
+          ]
+        },
+        {
+          "text": "Anthropic 主管香巴维·香巴维认为，优秀工程师需要熟悉智能体 AI、善于解决问题、具备出色沟通能力及扎实工程经验。",
+          "entities": [
+            "Anthropic",
+            "香巴维·香巴维",
+            "智能体 AI"
+          ],
+          "neighbors": [
+            "史蒂夫·科菲尔德",
+            "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+            "Anthropic 希望树立 AI 技能培养的黄金标准",
+            "赛富时"
+          ],
+          "edges": [
+            {
+              "id": 1,
+              "s": "香巴维·香巴维",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "香巴维 · 香巴维（Shambhavi Shambhavi），Anthropic 负责合作伙伴市场战略与运营的主管",
+              "confidence": 1.0
+            },
+            {
+              "id": 2,
+              "s": "史蒂夫·科菲尔德",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "史蒂夫 · 科菲尔德（Steve Corfield），Anthropic 全球业务拓展与合作主管",
+              "confidence": 1.0
+            },
+            {
+              "id": 4,
+              "s": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+              "t": "Anthropic",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "这家人工智能公司本月早些时候宣布，将投入 1 亿美元",
+              "confidence": 1.0
+            },
+            {
+              "id": 14,
+              "s": "Anthropic 希望树立 AI 技能培养的黄金标准",
+              "t": "Anthropic",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "让 Anthropic 树立“AI 技能培养的黄金标准”",
+              "confidence": 1.0
+            },
+            {
+              "id": 16,
+              "s": "Anthropic",
+              "t": "赛富时",
+              "predicate": "relatedTo",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "Anthropic 的重要合作伙伴赛富时",
+              "confidence": 1.0
+            }
+          ]
+        },
+        {
+          "text": "另一位主管史蒂夫·科菲尔德补充强调了强烈好奇心的重要性。",
+          "entities": [
+            "史蒂夫·科菲尔德"
+          ],
+          "neighbors": [
+            "Anthropic"
+          ],
+          "edges": [
+            {
+              "id": 2,
+              "s": "史蒂夫·科菲尔德",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "史蒂夫 · 科菲尔德（Steve Corfield），Anthropic 全球业务拓展与合作主管",
+              "confidence": 1.0
+            }
+          ]
+        },
+        {
+          "text": "Anthropic 希望通过该项目及其他培训树立 AI 技能培养的“黄金标准”，科菲尔德认为企业部署面临的关键障碍是技能缺口，而非意愿不足。",
+          "entities": [
+            "Anthropic",
+            "史蒂夫·科菲尔德",
+            "AI 技能培养"
+          ],
+          "neighbors": [
+            "香巴维·香巴维",
+            "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+            "Anthropic 希望树立 AI 技能培养的黄金标准",
+            "赛富时"
+          ],
+          "edges": [
+            {
+              "id": 2,
+              "s": "史蒂夫·科菲尔德",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "史蒂夫 · 科菲尔德（Steve Corfield），Anthropic 全球业务拓展与合作主管",
+              "confidence": 1.0
+            },
+            {
+              "id": 1,
+              "s": "香巴维·香巴维",
+              "t": "Anthropic",
+              "predicate": "worksFor",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "香巴维 · 香巴维（Shambhavi Shambhavi），Anthropic 负责合作伙伴市场战略与运营的主管",
+              "confidence": 1.0
+            },
+            {
+              "id": 4,
+              "s": "Anthropic 计划投入 1 亿美元并在 2027 年底前培养一万名前沿部署工程师",
+              "t": "Anthropic",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "这家人工智能公司本月早些时候宣布，将投入 1 亿美元",
+              "confidence": 1.0
+            },
+            {
+              "id": 14,
+              "s": "Anthropic 希望树立 AI 技能培养的黄金标准",
+              "t": "Anthropic",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "让 Anthropic 树立“AI 技能培养的黄金标准”",
+              "confidence": 1.0
+            },
+            {
+              "id": 15,
+              "s": "Anthropic 希望树立 AI 技能培养的黄金标准",
+              "t": "AI 技能培养",
+              "predicate": "about",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "让 Anthropic 树立“AI 技能培养的黄金标准”",
+              "confidence": 1.0
+            },
+            {
+              "id": 16,
+              "s": "Anthropic",
+              "t": "赛富时",
+              "predicate": "relatedTo",
+              "source": "article:0552d0796a761a267b95990a",
+              "evidence": "Anthropic 的重要合作伙伴赛富时",
+              "confidence": 1.0
+            }
+          ]
+        }
+      ],
+      "entity_count": 13,
+      "relation_count": 16,
+      "rejections": 0
+    }
+  ]
+}
