@@ -423,3 +423,21 @@ python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang j
 可离线使用，也可通过 `--base-url` 连接 OntoKB。语言参数选择声音和标签，不翻译正文。
 配音使用 macOS `say`，直接输出 24 kHz 单声道 PCM WAV（`--file-format=WAVE --data-format=LEI16@24000`）；测试可设 `NPOCUT_FAKE_TTS=1` 生成静音。
 工具和字体可通过 `NPOCUT_FFMPEG`、`NPOCUT_FFPROBE`、`NPOCUT_FONT` 覆盖。
+
+### 自动生成新增或变更的 KB 条目
+
+```bash
+python3 kb_autogen.py --from-json kb_out/reading.json --dry-run
+python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,youtube
+```
+
+省略 `--from-json` 则访问在线 API。默认每次最多生成 3 个条目，输出横竖两版
+（`--formats landscape,vertical`）。内容或渲染参数变化会重新生成；相同内容失败
+最多尝试 3 次，`--force ID` 可强制重试。支持 `--size`、`--voice`、`--lang`、
+`--max-points`、`--no-burn`、`--out`。状态原子保存于 `kb_out/autogen_state.json`，
+`kb_out/index.html` 展示标题、时长、视频和来源链接；输出采用防碰撞条目目录。
+锁文件 `.autogen.lock` 两小时后过期，定时任务应在两小时内完成；
+`.autogen.guard` 串行保护锁的获取。在线 API 不可达时提示
+`ontokb offline, skipped` 并返回 0，`--strict` 则返回 1；快照错误或渲染失败返回 1。
+`--dry-run` 仅打印计划，不渲染或更新状态及图库。结尾输出一行
+`generated`、`skipped`、`failed` JSON 统计。所有生成文件应放在已忽略的 `kb_out/`。

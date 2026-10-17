@@ -1213,3 +1213,24 @@ Language selects voice/labels, not translation. macOS `say` supplies offline TTS
 as 24 kHz mono PCM WAV (`--file-format=WAVE --data-format=LEI16@24000`);
 `NPOCUT_FAKE_TTS=1` generates silence for testing. Override tools/fonts with
 `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`, and `NPOCUT_FONT`.
+
+### Autonomous KB generation
+
+```bash
+python3 kb_autogen.py --from-json kb_out/reading.json --dry-run
+python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,youtube
+```
+
+Omit `--from-json` for the live API. New or changed content/render settings generate
+both `--formats landscape,vertical` by default; unchanged items are skipped.
+Failures retry up to three attempts per content hash; `--force ID` bypasses that
+check. `--size`, `--voice`, `--lang`, `--max-points`, `--no-burn`, and `--out` are
+supported. Each run ends with JSON counts (`generated`, `skipped`, `failed`).
+State is saved atomically in `kb_out/autogen_state.json`, and `kb_out/index.html`
+links generated videos with titles, durations and sources. A `.autogen.lock`
+lease prevents overlapping runs and expires after two hours; keep cron runs shorter
+than that. The separate `.autogen.guard` serializes lease acquisition.
+Offline live API runs print `ontokb offline, skipped` and exit 0 (`--strict`: exit 1).
+Invalid snapshots and render failures exit 1. Dry runs print the plan without
+rendering or updating state/gallery. Videos use collision-resistant item folders
+inside the output directory; all generated files remain gitignored under `kb_out/`.

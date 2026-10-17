@@ -395,3 +395,16 @@ are temporary. `NPOCUT_FAKE_TTS=1` enables offline silent test renders. Font and
 ffmpeg overrides use `NPOCUT_FONT`, `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`.
 Real TTS uses `say --file-format=WAVE --data-format=LEI16@24000` for 24 kHz
 mono WAV; keep the explicit WAVE format when changing synthesis commands.
+
+## Autonomous OntoKB generation
+
+Use `python3 kb_autogen.py --from-json snapshot.json` for incremental generation
+through `kb_video.render_script`. Omit the snapshot flag for live OntoKB.
+Default: three items/run, landscape and vertical. Use `--dry-run` to inspect,
+`--kinds article,youtube` to filter, `--formats landscape` to select layouts,
+and `--force ID` to regenerate. Render options match the video tool (`--size`,
+`--voice`, `--lang`, `--max-points`, `--no-burn`, `--out`). Atomic state and the
+static gallery live under ignored `kb_out/`. Failed hashes get three attempts;
+changed hashes reset attempts. The two-hour lock lease prevents cron overlaps;
+finish runs within two hours. Live API outages skip with exit 0 unless `--strict`.
+Every run ends with JSON counts. Dry runs leave state and gallery unchanged.
