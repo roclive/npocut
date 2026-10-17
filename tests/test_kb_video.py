@@ -37,7 +37,7 @@ def test_render_fixture(monkeypatch, tmp_path, vertical):
     if vertical:
         args += ['--vertical', '--no-burn']
     assert video.main(args) == 0
-    directory = next(tmp_path.iterdir())
+    directory = next(tmp_path.iterdir()) / ('180x320' if vertical else '320x180')
     manifest = json.loads((directory / 'manifest.json').read_text())
     final = directory / manifest['files']['final']
     data = probe_json(final)
@@ -106,3 +106,36 @@ def test_script_cli_offline(monkeypatch, tmp_path):
 def test_invalid_size(size):
     with pytest.raises(ValueError, match='Size'):
         video.render_script({'segments': [{'narration': 'Hello'}]}, size=size)
+
+
+def test_formats_coexist(monkeypatch, tmp_path):
+    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
+    item = load_library(FIXTURE)[0]
+    for vertical, dimensions in [(False, (320, 180)), (True, (180, 320))]:
+        args = [str(item['id']), '--from-json', str(FIXTURE), '--size', '320x180',
+                '--max-points', '0', '--out', str(tmp_path)]
+        assert video.main(args + (['--vertical'] if vertical else [])) == 0
+    directory = next(tmp_path.iterdir())
+    for dimensions in [(320, 180), (180, 320)]:
+        folder = directory / f'{dimensions[0]}x{dimensions[1]}'
+        manifest = json.loads((folder / 'manifest.json').read_text())
+        final = folder / manifest['files']['final']
+        assert final.exists()
+        stream = next(s for s in probe_json(final)['streams'] if s['codec_type'] == 'video')
+        assert (stream['width'], stream['height']) == dimensions
+
+
+@pytest.mark.parametrize('text', [
+    '中文测试，标点。日本語、句読点。' * 4,
+    '测试（括号）以及「引用」和『内容』【标题】《书名》' * 3,
+    '你好！？结束……下一句；说明：内容。' * 3,
+])
+def test_kinsoku(text):
+    from PIL import ImageFont
+    font = ImageFont.truetype(video.font_path(), 24)
+    for width in [100, 140, 200]:
+        lines = video.wrap_text(text, font, width)
+        assert ''.join(lines) == text
+        assert all(font.getlength(line) <= width for line in lines)
+        assert all(line[0] not in '，。、；：！？）」』】》…' for line in lines)
+        assert all(line[-1] not in '（「『【《' for line in lines)

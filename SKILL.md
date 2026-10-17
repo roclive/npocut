@@ -390,7 +390,7 @@ Use `python3 kb_video.py ITEM_ID --from-json snapshot.json` to render summary/ke
 slides with macOS offline TTS and burned sentence subtitles. `--script script.json`
 bypasses OntoKB completely; `--base-url` fetches live items. `--vertical`, `--size WxH`,
 `--voice`, `--lang zh|ja|en`, `--max-points`, `--out`, and `--no-burn` customize output.
-Final videos, SRT and the manifest live in ignored `kb_out/<slug>/`; intermediates
+Final videos, SRT and the manifest live in ignored `kb_out/<slug>/landscape/` or `kb_out/<slug>/vertical/` (`--size`: `kb_out/<slug>/WxH/`); intermediates
 are temporary. `NPOCUT_FAKE_TTS=1` enables offline silent test renders. Font and
 ffmpeg overrides use `NPOCUT_FONT`, `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`.
 Real TTS uses `say --file-format=WAVE --data-format=LEI16@24000` for 24 kHz

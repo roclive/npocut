@@ -79,17 +79,28 @@ def wrap_text(text: str, font: ImageFont.FreeTypeFont, width: float) -> list[str
     """Wrap by measured glyph width, including CJK and unbroken URLs."""
     if width <= 0:
         raise ValueError('Text width must be positive')
+    closing = set('，。、；：！？）」』】》…,.!?;:)]}')
+    opening = set('（「『【《([{')
     lines = []
     for paragraph in text.split('\n'):
-        line = ''
-        for char in paragraph:
-            if font.getlength(char) > width:
+        remaining = paragraph.strip()
+        while remaining:
+            end = 0
+            while end < len(remaining) and font.getlength(remaining[:end+1]) <= width:
+                end += 1
+            if end == 0:
                 raise ValueError('A glyph exceeds the available text width')
-            if line and font.getlength(line + char) > width:
-                lines.append(line.rstrip())
-                line = ''
-            line += char
-        lines.append(line.rstrip())
+            if end < len(remaining):
+                # Backtrack the boundary so punctuation stays with its neighbour,
+                # without allowing hanging punctuation to exceed the pixel limit.
+                while end and (remaining[end] in closing or remaining[end-1] in opening):
+                    end -= 1
+                if not end:
+                    raise ValueError('Punctuation group exceeds the available text width')
+            lines.append(remaining[:end].rstrip())
+            remaining = remaining[end:].lstrip()
+        if not paragraph.strip():
+            lines.append('')
     return lines
 
 
@@ -112,7 +123,7 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
     draw = ImageDraw.Draw(image)
     margin = max(8, int(width * .075))
     usable = width - margin * 2
-    scale = min(width / 1920, height / 1080)
+    short = min(size)
     draw.rounded_rectangle((margin, int(height * .09), width-margin, int(height * .105)),
                            radius=2, fill='#53d7bd')
     title = segment.get('kind') == 'title'
@@ -123,17 +134,31 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
         body = ' / '.join(map(str, categories)) if isinstance(categories, list) else str(categories)
     if segment.get('kind') == 'outro':
         body = str(script.get('url', body))
-    def block(text, y, h, initial, color):
-        font, lines, spacing = fit_text(text, usable, int(h), initial)
+    # The bottom 18% belongs exclusively to subtitles. The footer sits above it.
+    top, bottom = int(height * .15), int(height * .73)
+    gap = max(2, int(short * .035)) if body else 0
+    available = bottom - top
+    heading_height = int(available * (.65 if title else .42))
+    hf, headings, hs = fit_text(heading, usable, heading_height,
+                                max(1, int(short * (.095 if title else .075))))
+    body_height = available - len(headings) * hs - gap
+    bf, bodies, bs = fit_text(body, usable, max(1, body_height), max(1, int(short * .055)))
+    block_height = len(headings) * hs + gap + len(bodies) * bs
+    y = top + (available - block_height) / 2
+    for lines, font, spacing, color in [(headings, hf, hs, '#ffffff'),
+                                        (bodies, bf, bs, '#d4e2ef')]:
         for line in lines:
             draw.text((margin, y), line, font=font, fill=color)
             y += spacing
-    block(heading, height*.17, height*(.36 if title else .20),
-          max(12, int((88 if title else 60)*scale)), '#ffffff')
-    block(body, height*(.56 if title else .41), height*.30,
-          max(9, int(43*scale)), '#d4e2ef')
+        if lines is headings:
+            y += gap
     footer = f"{script.get('title', '')}  ·  {index+1}/{len(script['segments'])}"
-    block(footer, height*.89, height*.06, max(6, int(22*scale)), '#8fa7bf')
+    font, lines, spacing = fit_text(footer, usable, max(2, int(height*.05)),
+                                    max(1, int(short*.020)))
+    y = height * .76
+    for line in lines:
+        draw.text((margin, y), line, font=font, fill='#8fa7bf')
+        y += spacing
     image.save(target)
 
 
@@ -189,9 +214,9 @@ def burn_subtitles(video: Path, target: Path, size: tuple[int, int], tmp: Path) 
     shutil.copyfile(font_file, fonts / font_file.name)
     family = ImageFont.truetype(str(font_file), 20).getname()[0]
     # libass's default PlayResY is 288: express styles in that coordinate space.
-    font_size = max(10, round(288 * (0.033 if size[0] >= size[1] else .022)))
+    font_size = max(1, round(288 * min(size) / size[1] * .033))
     style = (f'FontName={family},FontSize={font_size},Alignment=2,'
-             'MarginV=15,MarginL=18,MarginR=18,Outline=1,Shadow=0')
+             'MarginV=9,MarginL=18,MarginR=18,Outline=1,Shadow=0')
     style = style.replace(',', r'\,')
     ffmpeg('-i', video, '-vf', f'subtitles=subs.srt:fontsdir=fonts:force_style={style}',
            '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
@@ -208,7 +233,8 @@ def write_manifest(script: dict, durations: list[float], voice: str,
 
 
 def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080),
-                  voice: str | None = None, lang: str | None = None, burn: bool = True) -> Path:
+                  voice: str | None = None, lang: str | None = None, burn: bool = True,
+                  custom_size: bool = False) -> Path:
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
     if any(not isinstance(s, dict) or not isinstance(s.get('narration'), str) for s in script['segments']):
@@ -217,7 +243,11 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
         raise ValueError('Size must contain even dimensions of at least 32 pixels')
     voice = choose_voice(lang or script.get('lang', 'zh'), voice)
     slug = slugify(script.get('id') or script.get('title', 'video'))
-    destination = out.resolve() / slug
+    format_name = {(1920, 1080): 'landscape', (1080, 1920): 'vertical'}.get(
+        tuple(size), f'{size[0]}x{size[1]}')
+    if custom_size:
+        format_name = f'{size[0]}x{size[1]}'
+    destination = out.resolve() / slug / format_name
     with tempfile.TemporaryDirectory(prefix='npocut-kb-') as directory:
         tmp = Path(directory)
         audio, slides, durations = [], [], []
@@ -271,7 +301,7 @@ def main(argv=None) -> int:
             script = build_script(item, args.max_points, args.lang or 'zh')
             script['categories'] = item.get('categories', [])
         print(render_script(script, out=args.out, size=size, voice=args.voice,
-                            lang=args.lang, burn=not args.no_burn))
+                            lang=args.lang, burn=not args.no_burn, custom_size=bool(args.size)))
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'kb_video: {exc}\n')
     return 0

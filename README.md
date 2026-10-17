@@ -1203,7 +1203,7 @@ python3 kb_video.py ITEM_ID --from-json tests/fixtures/ontokb_reading.json
 python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang ja
 ```
 
-Outputs in `kb_out/<slug>/`: `video.mp4`, `<slug>.subbed.mp4`, `subs.srt`, and
+Outputs in `kb_out/<slug>/landscape/` or `kb_out/<slug>/vertical/` (`--size`: `kb_out/<slug>/WxH/`): `video.mp4`, `<slug>.subbed.mp4`, `subs.srt`, and
 `manifest.json` (script, measured segment durations including 0.4 s pauses, voice,
 files, and creation time). `--no-burn` returns the unburned video. Use `--size WxH`,
 `--voice`, `--lang zh|ja|en`, `--max-points`, and `--out` to customize. Vertical mode

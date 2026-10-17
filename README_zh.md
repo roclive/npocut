@@ -415,7 +415,7 @@ python3 kb_video.py ITEM_ID --from-json tests/fixtures/ontokb_reading.json
 python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang ja
 ```
 
-将摘要和要点制作成配音幻灯片，默认烧录字幕。结果保存在 `kb_out/<slug>/`：
+将摘要和要点制作成配音幻灯片，默认烧录字幕。结果保存在 `kb_out/<slug>/landscape/` 或 `kb_out/<slug>/vertical/`（指定 `--size` 时为 `kb_out/<slug>/WxH/`）：
 `video.mp4`、`<slug>.subbed.mp4`、`subs.srt`、`manifest.json`（脚本、含每段
 0.4 秒停顿的时长、声音、文件及创建时间）。`--no-burn` 跳过烧录；支持
 `--size WxH`、`--voice`、`--lang zh|ja|en`、`--max-points`、`--out`。
