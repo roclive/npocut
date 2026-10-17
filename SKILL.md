@@ -427,3 +427,9 @@ for the Web server Python. Imported JSON is snapshotted under ignored `kb_out/`
 and reused for generation. Files are served only within that directory, with
 Range support. Check endpoints and guards using `npm run test:kb`.
 Identical libraries reuse `web-source-<sha256 first 16 hex>.json`; server startup removes `web-source-*.json` files older than 7 days.
+
+### Narration backends / 配音后端
+
+`kb_video.py` and `kb_autogen.py` accept `--tts auto|edge|say` (default `auto`) and backend-specific `--voice`. Edge requires internet; defaults: Chinese `zh-CN-YunyangNeural`, Japanese `ja-JP-KeitaNeural`, English `en-US-GuyNeural`. Auto retries Edge twice, then regenerates the whole video using offline macOS say (Chinese Tingting where installed). Use `--tts say --voice Tingting` for explicit offline narration. An Edge voice override is discarded on fallback; choose a say voice with `--tts say`.
+
+Audio and sentence boundaries are cached in `kb_out/.tts_cache/`; manifests record `tts_backend`, `voice`, and `fallback_reason`. Edge sentence boundaries drive subtitles; long cues split at clause punctuation to avoid orphan endings. `NPOCUT_FAKE_TTS=1` always uses silent offline audio. Changing `--tts` or `--voice` invalidates autogen content hashes.

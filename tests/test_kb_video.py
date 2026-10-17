@@ -194,3 +194,74 @@ def test_voice_locale_fallback(monkeypatch):
     monkeypatch.setattr(video.subprocess, 'run', lambda *a, **kw: Result())
     assert video.choose_voice('zh') == 'Lili'
     assert video.choose_voice('ja') == 'Kyoko'
+
+
+def test_orphan_clause(tmp_path):
+    text = 'Anthropic 将投入 1 亿美元培养前沿部署工程师，目标是到 2027 年底培养一万人。'
+    target = tmp_path / 'subs.srt'
+    video.make_subtitles({'segments': [{'narration': text}]}, [12.4], target, (1080, 1920))
+    cues = parse_srt(target)
+    assert all(len(''.join(c.lines).strip()) >= 6 for c in cues)
+    assert ''.join(''.join(c.lines) for c in cues).replace(' ', '') == text.replace(' ', '')
+    assert all(len(c.lines) <= 2 for c in cues)
+
+
+def test_edge_boundaries_cache(monkeypatch, tmp_path):
+    import types
+    monkeypatch.delenv('NPOCUT_FAKE_TTS')
+    mp3 = tmp_path / 'sample.mp3'
+    video.ffmpeg('-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono', '-t', 3, mp3)
+    calls = []
+    class Communicate:
+        def __init__(self, text, voice, **kwargs):
+            assert kwargs == {'boundary': 'SentenceBoundary'}
+            calls.append((text, voice))
+        async def stream(self):
+            yield dict(type='audio', data=mp3.read_bytes())
+            yield dict(type='SentenceBoundary', text='第一句。', offset=2000000, duration=6000000)
+            yield dict(type='SentenceBoundary', text='第二句。', offset=15000000, duration=10000000)
+    monkeypatch.setitem(sys.modules, 'edge_tts', types.SimpleNamespace(Communicate=Communicate))
+    script = {'id': 'edge', 'segments': [{'narration': '第一句。第二句。'}]}
+    for _ in range(2):
+        final = video.render_script(script, out=tmp_path / 'out', size=(64, 36), burn=False)
+    assert len(calls) == 1
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    assert manifest['tts_backend'] == 'edge'
+    assert manifest['voice'] == 'zh-CN-YunyangNeural'
+    cues = parse_srt(final.parent / 'subs.srt')
+    assert [(c.start, c.end) for c in cues] == [(.2, .8), (1.5, 2.5)]
+
+
+def test_auto_whole_video_fallback(monkeypatch, tmp_path, caplog):
+    import types
+    monkeypatch.delenv('NPOCUT_FAKE_TTS')
+    monkeypatch.setattr(video.time, 'sleep', lambda _: None)
+    mp3 = tmp_path / 'sample.mp3'
+    video.ffmpeg('-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono', '-t', 1, mp3)
+    calls = []
+    class Communicate:
+        def __init__(self, text, voice, **kwargs):
+            calls.append(text)
+            self.text = text
+        async def stream(self):
+            if self.text == '第一句。':
+                yield dict(type='audio', data=mp3.read_bytes())
+            else:
+                raise OSError('offline')
+    monkeypatch.setitem(sys.modules, 'edge_tts', types.SimpleNamespace(Communicate=Communicate))
+    monkeypatch.setattr(video, 'choose_voice', lambda *args: 'Tingting')
+    original = video.synthesize_segment
+    say_calls = []
+    def silent_say(text, voice, target):
+        say_calls.append((text, voice))
+        with monkeypatch.context() as context:
+            context.setenv('NPOCUT_FAKE_TTS', '1')
+            return original(text, voice, target)
+    monkeypatch.setattr(video, 'synthesize_segment', silent_say)
+    script = {'id': 'fallback', 'segments': [{'narration': '第一句。'}, {'narration': '第二句。'}]}
+    final = video.render_script(script, out=tmp_path / 'out', size=(64, 36), burn=False)
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    assert manifest['tts_backend'] == 'say' and manifest['voice'] == 'Tingting'
+    assert 'offline' in manifest['fallback_reason']
+    assert len(calls) == 4 and len(say_calls) == 2
+    assert len(caplog.records) == 1
