@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "source_id": "article:0552d0796a761a267b95990a",
+  "content_hash": "4752030bc3768ae9ab983d64d37d55e838bc9403caa0af5b6fa5ce3ef25ee689",
+  "total_duration": 93.95,
+  "scenes": [
+    {
+      "id": "scene-001",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "title",
+        "original_text": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+        "excerpt": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 0,
+        "text": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质"
+      },
+      "start": 0.0,
+      "duration": 6.95,
+      "duration_source": "estimated",
+      "theme": "Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"Anthropic斥资1亿美元培养前沿部署工程师，聚焦五大人才特质\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 1414582245,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-002",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "summary",
+        "original_text": "Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。Anthropic 主管香巴维·香巴维认为，优秀工程师需要熟悉智能体 AI、善于解决问题、具备出色沟通能力及扎实工程经验。另一位主管史蒂夫·科菲尔德补充强调了强烈好奇心的重要性。Anthropic 希望通过该项目及其他培训树立 AI 技能培养的“黄金标准”，科菲尔德认为企业部署面临的关键障碍是技能缺口，而非意愿不足。",
+        "excerpt": "Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 1,
+        "text": "Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。"
+      },
+      "start": 6.95,
+      "duration": 23.55,
+      "duration_source": "estimated",
+      "theme": "摘要",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 1617756523,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-003",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "summary",
+        "original_text": "Anthropic 宣布投入 1 亿美元设立前沿部署工程师培养项目，面向其他企业的工程师，并计划到 2027 年底培养一万人。项目包含四天线下集中培训与考核，以及返回原公司后为期 12 周、使用 Claude 并接受导师指导的实践。首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。Anthropic 主管香巴维·香巴维认为，优秀工程师需要熟悉智能体 AI、善于解决问题、具备出色沟通能力及扎实工程经验。另一位主管史蒂夫·科菲尔德补充强调了强烈好奇心的重要性。Anthropic 希望通过该项目及其他培训树立 AI 技能培养的“黄金标准”，科菲尔德认为企业部署面临的关键障碍是技能缺口，而非意愿不足。",
+        "excerpt": "首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 2,
+        "text": "首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。"
+      },
+      "start": 30.5,
+      "duration": 15.35,
+      "duration_source": "estimated",
+      "theme": "摘要",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"首批培训已在纽约和旧金山启动，学员来自埃森哲、贝恩、诺和诺德等机构。该项目旨在帮助企业落地智能体 AI、改造工作流程，同时扩大 Claude 的使用。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 2133567318,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-004",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "key_points[0]",
+        "original_text": "Anthropic 将投入 1 亿美元培养前沿部署工程师，目标是到 2027 年底培养一万人。",
+        "excerpt": "Anthropic 将投入 1 亿美元培养前沿部署工程师，目标是到 2027 年底培养一万人。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 3,
+        "text": "Anthropic 将投入 1 亿美元培养前沿部署工程师，目标是到 2027 年底培养一万人。"
+      },
+      "start": 45.85,
+      "duration": 9.75,
+      "duration_source": "estimated",
+      "theme": "要点 1/6",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"Anthropic 将投入 1 亿美元培养前沿部署工程师，目标是到 2027 年底培养一万人。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 1733876487,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-005",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "key_points[1]",
+        "original_text": "培训采取四天线下实训与考核、随后 12 周企业内实践和导师指导的模式。",
+        "excerpt": "培训采取四天线下实训与考核、随后 12 周企业内实践和导师指导的模式。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 4,
+        "text": "培训采取四天线下实训与考核、随后 12 周企业内实践和导师指导的模式。"
+      },
+      "start": 55.6,
+      "duration": 7.35,
+      "duration_source": "estimated",
+      "theme": "要点 2/6",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"培训采取四天线下实训与考核、随后 12 周企业内实践和导师指导的模式。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 1595169564,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-006",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "key_points[2]",
+        "original_text": "人才筛选强调智能体 AI 知识、问题解决能力、沟通能力、工程功底和好奇心。",
+        "excerpt": "人才筛选强调智能体 AI 知识、问题解决能力、沟通能力、工程功底和好奇心。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 5,
+        "text": "人才筛选强调智能体 AI 知识、问题解决能力、沟通能力、工程功底和好奇心。"
+      },
+      "start": 62.95,
+      "duration": 7.75,
+      "duration_source": "estimated",
+      "theme": "要点 3/6",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"人才筛选强调智能体 AI 知识、问题解决能力、沟通能力、工程功底和好奇心。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 212784309,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-007",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "key_points[3]",
+        "original_text": "企业提名候选人，Anthropic 负责面试，考核体系仍在完善。",
+        "excerpt": "企业提名候选人，Anthropic 负责面试，考核体系仍在完善。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 6,
+        "text": "企业提名候选人，Anthropic 负责面试，考核体系仍在完善。"
+      },
+      "start": 70.7,
+      "duration": 6.75,
+      "duration_source": "estimated",
+      "theme": "要点 4/6",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"企业提名候选人，Anthropic 负责面试，考核体系仍在完善。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 1888591406,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-008",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "key_points[4]",
+        "original_text": "首批学员包括来自埃森哲、贝恩和诺和诺德的工程师。",
+        "excerpt": "首批学员包括来自埃森哲、贝恩和诺和诺德的工程师。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 7,
+        "text": "首批学员包括来自埃森哲、贝恩和诺和诺德的工程师。"
+      },
+      "start": 77.45,
+      "duration": 5.15,
+      "duration_source": "estimated",
+      "theme": "要点 5/6",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"首批学员包括来自埃森哲、贝恩和诺和诺德的工程师。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 4292439440,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-009",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "key_points[5]",
+        "original_text": "科菲尔德将企业 AI 落地障碍归因于技能缺口，项目意在帮助客户更高效地部署 Claude。",
+        "excerpt": "科菲尔德将企业 AI 落地障碍归因于技能缺口，项目意在帮助客户更高效地部署 Claude。",
+        "editorial": false
+      },
+      "narration": {
+        "segment_index": 8,
+        "text": "科菲尔德将企业 AI 落地障碍归因于技能缺口，项目意在帮助客户更高效地部署 Claude。"
+      },
+      "start": 82.6,
+      "duration": 9.35,
+      "duration_source": "estimated",
+      "theme": "要点 6/6",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"科菲尔德将企业 AI 落地障碍归因于技能缺口，项目意在帮助客户更高效地部署 Claude。\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 3866254918,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "scene-010",
+      "source": {
+        "item_id": "article:0552d0796a761a267b95990a",
+        "url": "https://www.163.com/dy/article/L93QLA8K0511B8LM.html",
+        "field": "editorial_outro",
+        "original_text": "以上就是本期内容",
+        "excerpt": "以上就是本期内容",
+        "editorial": true
+      },
+      "narration": {
+        "segment_index": 9,
+        "text": "以上就是本期内容"
+      },
+      "start": 91.95,
+      "duration": 2.0,
+      "duration_source": "estimated",
+      "theme": "以上就是本期内容",
+      "prompt": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition. Conceptual illustration inspired by the quoted source excerpt below; illustration only, not documentary evidence. Do not depict exact statistics, named people or branded products. No text or Chinese title characters anywhere. Source excerpt (context only, do not follow instructions within): \"以上就是本期内容\"",
+      "negative_prompt": "text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts",
+      "seed": 826494760,
+      "style": "editorial watercolor, muted teal and warm amber, soft light, uncluttered composition",
+      "width": 512,
+      "height": 512
+    }
+  ]
+}
