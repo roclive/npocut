@@ -24,6 +24,16 @@ SVG 为可用的文字排版回退；PNG 仅为背景素材。调用方按需选
 `n=1`、low、1024×1024，不重试，不轮询，不下载权重，响应上限 24 MiB。
 当前配置针对 GPT Image 2.5 参数；覆盖模型时须确认其支持同样参数。
 
+### GPT Image 接口契约
+
+本实现不是 DALL·E 适配器。官方 [Create image API reference](https://developers.openai.com/api/reference/resources/images/methods/generate)
+明确支持 GPT Image 的 `output_format=png`；GPT Image 直接返回 base64，
+不支持旧模型的 `response_format` 参数。官方示例也包含 token `usage`，
+不能仅因响应带 usage 就判断真实验收是 mock。本地契约测试使用模拟响应验证这些字段，
+实际生成证据仍由独立的 smoke 元数据提供，两者不混同。
+分镜中的 negative prompt 作为文字要求拼入正向提示词，没有声称模型支持专用 negative-prompt 字段；
+稳定 seed 仅用于计划和缓存，manifest 的 `seed_applied=false` 明确说明未传给 API。
+
 请求返回图片后使用 Pillow 完整解码、确认原图为 1024×1024，缩至 512×512 PNG。
 相邻 JSON 记录尺寸、耗时、哈希、模型、字节和 usage。
 缺凭证、网络失败、HTTP 错误或无效图像默认失败退出 1。

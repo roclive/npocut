@@ -39,12 +39,19 @@ def test_api_contract_and_decoding(tmp_path, monkeypatch):
     def request(req, timeout):
         calls.append(json.loads(req.data))
         assert req.full_url == 'https://api.openai.com/v1/images/generations'
-        return io.BytesIO(json.dumps({'data': [{'b64_json': base64.b64encode(buf.getvalue()).decode()}]}).encode())
+        return io.BytesIO(json.dumps({
+            'data': [{'b64_json': base64.b64encode(buf.getvalue()).decode()}],
+            'usage': {'input_tokens': 20, 'output_tokens': 196, 'total_tokens': 216},
+        }).encode())
 
     monkeypatch.setattr('urllib.request.urlopen', request)
     result = generate('library', tmp_path / 'api.png', Config('openai'))
     assert len(calls) == 1
     assert calls[0]['n'] == 1 and calls[0]['quality'] == 'low'
+    assert calls[0]['model'] == 'gpt-image-2.5-flare'
+    assert calls[0]['output_format'] == 'png'
+    assert 'response_format' not in calls[0]
+    assert result['usage'] == {'input_tokens': 20, 'output_tokens': 196, 'total_tokens': 216}
     assert Image.open(result['path']).size == (512, 512)
 
 
