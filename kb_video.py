@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from common import FFMPEG, Cue, concat_file_line, probe_duration, write_srt
 from kb_source import DEFAULT_BASE_URL, build_script, fetch_library, load_library, slugify
+from kb_templates import build_template_script, template_config, template_names
 
 PAD = 0.4
 SAY_DEFAULT_VOICE = 'Tingting'
@@ -204,19 +205,24 @@ def fit_text(text: str, width: int, height: int, initial: int):
 def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path,
                artwork: Path | None = None) -> None:
     width, height = size
+    template = script.get('template') or {}
+    colors = template.get('colors') or {}
+    background_color = colors.get('background', '#101e31')
+    veil_color = colors.get('veil', '#081321')
+    font_scale = float(template.get('font_scale', 1))
     if artwork is None:
-        image = Image.new('RGB', size, '#101e31')
+        image = Image.new('RGB', size, background_color)
     else:
         with Image.open(artwork) as source:
             image = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
         # A restrained veil keeps headings readable without hiding the illustration.
-        image = Image.blend(image, Image.new('RGB', size, '#081321'), .48)
+        image = Image.blend(image, Image.new('RGB', size, veil_color), .48)
     draw = ImageDraw.Draw(image)
     margin = max(8, int(width * .075))
     usable = width - margin * 2
     short = min(size)
     draw.rounded_rectangle((margin, int(height * .09), width-margin, int(height * .105)),
-                           radius=2, fill='#53d7bd')
+                           radius=2, fill=colors.get('accent', '#53d7bd'))
     title = segment.get('kind') == 'title'
     heading = str(segment.get('heading', ''))
     body = str(segment.get('text', ''))
@@ -231,13 +237,13 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
     available = bottom - top
     heading_height = int(available * (.65 if title else .42))
     hf, headings, hs = fit_text(heading, usable, heading_height,
-                                max(1, int(short * (.095 if title else .075))))
+                                max(1, int(short * (.095 if title else .075) * font_scale)))
     body_height = available - len(headings) * hs - gap
-    bf, bodies, bs = fit_text(body, usable, max(1, body_height), max(1, int(short * .055)))
+    bf, bodies, bs = fit_text(body, usable, max(1, body_height), max(1, int(short * .055 * font_scale)))
     block_height = len(headings) * hs + gap + len(bodies) * bs
     y = top + (available - block_height) / 2
-    for lines, font, spacing, color in [(headings, hf, hs, '#ffffff'),
-                                        (bodies, bf, bs, '#d4e2ef')]:
+    for lines, font, spacing, color in [(headings, hf, hs, colors.get('heading', '#ffffff')),
+                                        (bodies, bf, bs, colors.get('body', '#d4e2ef'))]:
         for line in lines:
             draw.text((margin, y), line, font=font, fill=color)
             y += spacing
@@ -248,7 +254,7 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
                                     max(1, int(short*.020)))
     y = height * .76
     for line in lines:
-        draw.text((margin, y), line, font=font, fill='#8fa7bf')
+        draw.text((margin, y), line, font=font, fill=colors.get('footer', '#8fa7bf'))
         y += spacing
     image.save(target)
 
@@ -290,7 +296,7 @@ def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int,
                        artwork: Path | None, background: Path, overlay: Path) -> None:
     """Make a movable image layer and a fixed text/progress layer."""
     if artwork is None:
-        visual = Image.new('RGB', size, '#101e31')
+        visual = Image.new('RGB', size, (script.get('template') or {}).get('colors', {}).get('background', '#101e31'))
     else:
         with Image.open(artwork) as source:
             visual = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
@@ -314,8 +320,9 @@ def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int,
     y = int(height * .79)
     draw.rounded_rectangle((margin, y, width-margin, y + max(2, int(height*.008))),
                            radius=2, fill=(255, 255, 255, 55))
+    accent = (script.get('template') or {}).get('colors', {}).get('accent', '#53d7bd')
     draw.rounded_rectangle((margin, y, margin + int((width-2*margin)*progress),
-                            y + max(2, int(height*.008))), radius=2, fill=(83, 215, 189, 220))
+                            y + max(2, int(height*.008))), radius=2, fill=accent)
     rgba.save(overlay)
     flat.unlink()
 
@@ -441,6 +448,8 @@ def write_manifest(script: dict, durations: list[float], voice: str,
                     visuals=visuals or {'mode': 'legacy', 'scene_count': 0},
                     total_duration=probe_duration(final),
                     created_at=datetime.now(timezone.utc).isoformat())
+    manifest['template'] = script.get('template', {'id': 'legacy'})
+    manifest['aspect_ratio'] = (visuals or {}).get('aspect_ratio', '16:9')
     target.write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
 
 
@@ -518,6 +527,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                    'motion_scale': .04 if motion and available else 0,
                    'fade_seconds_max': .25 if motion and available else 0,
                    'subtitle_safe_area': {'bottom_fraction': .18},
+                   'aspect_ratio': '9:16' if size[1] > size[0] else '16:9',
                    'scene_manifest': str(Path(scene_manifest).resolve()) if scene_manifest else None}
         write_manifest(script, durations, voice, files, final, tmp / 'manifest.json', backend,
                        fallback_reason, visuals)
@@ -540,6 +550,8 @@ def main(argv=None) -> int:
     parser.add_argument('--voice')
     parser.add_argument('--lang', choices=['zh', 'ja', 'en'])
     parser.add_argument('--max-points', type=int, default=6)
+    parser.add_argument('--template', choices=template_names(),
+                        help='finished-video preset; omit to preserve the legacy template')
     parser.add_argument('--out', type=Path, default=Path('kb_out'))
     parser.add_argument('--no-burn', action='store_true')
     parser.add_argument('--scenes', type=Path, help='kb_scenes scene-manifest.json')
@@ -554,12 +566,15 @@ def main(argv=None) -> int:
             size = (min(size), max(size))
         if args.script:
             script = json.loads(args.script.read_text(encoding='utf-8-sig'))
+            if args.template:
+                script['template'] = template_config(args.template)
         else:
             library = load_library(args.from_json) if args.from_json else fetch_library(args.base_url)
             item = next((i for i in library if str(i.get('id')) == args.id), None)
             if item is None:
                 raise ValueError(f'Item not found: {args.id}')
-            script = build_script(item, args.max_points, args.lang or 'zh')
+            script = (build_template_script(item, args.template, args.lang or 'zh')
+                      if args.template else build_script(item, args.max_points, args.lang or 'zh'))
             script['categories'] = item.get('categories', [])
         print(render_script(script, out=args.out, size=size, voice=args.voice,
                             lang=args.lang, tts=args.tts, burn=not args.no_burn,

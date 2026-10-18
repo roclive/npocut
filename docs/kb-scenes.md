@@ -17,3 +17,27 @@ Python 调用 `build_scene_plan(item, script, durations=[...])` 可传入实际 
 缓存键涵盖完整来源内容摘要、provider、模型、prompt、negative prompt、风格、尺寸和 seed。命中前检查图片存在、PNG 签名与 SHA-256；缺图或内容损坏会重建。来源内容任何变化都会失效。单场景 API 失败或无凭证会生成明确标记的离线渐变占位图，继续后续场景；占位图不会被当作成功 AI 缓存，下一次运行会重新尝试。素材无法写入时保留该场景、标记 `path=null`。manifest 不包含 API 密钥。
 
 离线测试：`python -m pytest -q tests/test_kb_scenes.py`。
+
+## 成片模板
+
+`--template` 提供三个克制的预设，不传参时继续使用旧模板：
+
+| 预设 | 时长上限 | 镜头节奏 | 开场 |
+| --- | ---: | --- | --- |
+| `knowledge-brief` | 90 s | 5–12 s | 来源标题 |
+| `concept-explainer` | 150 s | 8–18 s | 来源标题 |
+| `vertical-short` | 45 s | 3–8 s | 第一条来源要点 |
+
+模板还分别记录字号系数和完整色板。内容只从标题、摘要和要点选取，会去重并按时长预算停止；素材少时直接缩短，不重复旁白。最后一幕始终是来源页。模板配置、`aspect_ratio` 和每幕来源都写入 manifest。
+
+```sh
+python kb_scenes.py article:0552d0796a761a267b95990a \
+  --from-json tests/fixtures/ontokb_reading.json \
+  --template knowledge-brief --aspect-ratio 16:9 --plan-only
+
+python kb_video.py article:0552d0796a761a267b95990a \
+  --from-json tests/fixtures/ontokb_reading.json \
+  --template vertical-short --vertical
+```
+
+`知识简报`和`概念讲解`也可以传 `--vertical`，`竖版短视频`也可输出 16:9；模板与画幅是两个独立选项。

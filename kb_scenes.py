@@ -9,6 +9,7 @@ from pathlib import Path
 
 import kb_images
 from kb_source import _plain, build_script, load_library
+from kb_templates import build_template_script, template_config, template_names
 
 STYLE = 'editorial watercolor, muted teal and warm amber, soft light, uncluttered composition'
 NEGATIVE = 'text, Chinese characters, titles, captions, lettering, logos, watermarks, fabricated charts'
@@ -20,7 +21,8 @@ def digest(value):
 
 
 def build_scene_plan(item: dict, script: dict | None = None, *, durations=None,
-                     style=STYLE, size=(512, 512)) -> dict:
+                     style=STYLE, size=(512, 512), template: str | None = None,
+                     aspect_ratio: str = '16:9') -> dict:
     """One scene per existing narration paragraph; never paraphrase factual claims.
 
     Explicit durations may come from measured TTS. Otherwise estimates use five
@@ -31,7 +33,15 @@ def build_scene_plan(item: dict, script: dict | None = None, *, durations=None,
         raise ValueError('image backend currently supports only 512x512 output')
     if not isinstance(style, str) or not style.strip() or len(style) > 500:
         raise ValueError('style must contain 1–500 characters')
-    script = script if script is not None else build_script(item)
+    if aspect_ratio not in ('16:9', '9:16'):
+        raise ValueError('aspect_ratio must be 16:9 or 9:16')
+    if template and script is None:
+        script = build_template_script(item, template)
+    else:
+        script = script if script is not None else build_script(item)
+    configured = template_config(template) if template else script.get('template')
+    if configured and configured.get('id') not in template_names():
+        raise ValueError('script contains an unknown template')
     segments = script.get('segments')
     if not isinstance(segments, list) or not segments:
         raise ValueError('script must contain nonempty segments')
@@ -80,8 +90,10 @@ def build_scene_plan(item: dict, script: dict | None = None, *, durations=None,
                            negative_prompt=NEGATIVE, seed=seed, style=style,
                            width=size[0], height=size[1]))
         cursor += seconds
-    return dict(schema_version=1, source_id=item.get('id', ''),
-                content_hash=digest(item), total_duration=round(cursor, 3), scenes=scenes)
+    return dict(schema_version=2, source_id=item.get('id', ''),
+                content_hash=digest(item), total_duration=round(cursor, 3),
+                template=configured or {'id': 'legacy'}, aspect_ratio=aspect_ratio,
+                scenes=scenes)
 
 
 def render_scene_plan(plan: dict, output: str | Path, *, cache_dir=None, config=None) -> dict:
@@ -135,6 +147,8 @@ def main(argv=None):
     parser.add_argument('--out', type=Path, default=Path('kb_out/scenes'))
     parser.add_argument('--cache-dir', type=Path)
     parser.add_argument('--provider', choices=('gradient', 'openai'))
+    parser.add_argument('--template', choices=template_names())
+    parser.add_argument('--aspect-ratio', choices=('16:9', '9:16'), default='16:9')
     parser.add_argument('--plan-only', action='store_true')
     args = parser.parse_args(argv)
     try:
@@ -142,7 +156,8 @@ def main(argv=None):
         if item is None:
             raise ValueError('source item not found')
         script = json.loads(args.script.read_text(encoding='utf-8')) if args.script else None
-        plan = build_scene_plan(item, script)
+        plan = build_scene_plan(item, script, template=args.template,
+                                aspect_ratio=args.aspect_ratio)
         args.out.mkdir(parents=True, exist_ok=True)
         if args.plan_only:
             (args.out / 'scene-manifest.json').write_text(json.dumps(plan, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

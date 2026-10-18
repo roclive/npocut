@@ -7,6 +7,7 @@ import pytest
 import kb_images
 from kb_source import build_script, load_library
 from kb_scenes import build_scene_plan, render_scene_plan, main
+from kb_templates import build_template_script, template_names
 
 
 @pytest.fixture
@@ -122,3 +123,29 @@ def test_corrupt_cache_and_model_change(item, tmp_path):
         build_scene_plan(item, size=(1024, 1024))
     with pytest.raises(ValueError, match='durations'):
         build_scene_plan(item, durations=[float('nan')])
+
+
+def test_three_finished_templates_are_distinct_source_backed_and_bounded(item):
+    plans = {}
+    for name in template_names():
+        script = build_template_script(item, name)
+        plan = build_scene_plan(item, script, aspect_ratio='9:16')
+        plans[name] = plan
+        assert plan['template']['id'] == name
+        assert plan['aspect_ratio'] == '9:16'
+        assert plan['total_duration'] <= plan['template']['max_duration']
+        narration = [s['narration']['text'] for s in plan['scenes']]
+        assert len(narration) == len(set(narration))
+        assert plan['scenes'][-1]['source']['editorial']
+        assert plan['scenes'][-1]['source']['url'] == item['url']
+    assert len({tuple(s['narration']['text'] for s in p['scenes'])
+                for p in plans.values()}) == 3
+    assert plans['vertical-short']['scenes'][0]['theme'] == '关键数据'
+
+
+def test_template_validation_and_legacy_preserved(item):
+    assert build_scene_plan(item)['template']['id'] == 'legacy'
+    with pytest.raises(ValueError, match='Unknown template'):
+        build_scene_plan(item, template='loud-clickbait')
+    with pytest.raises(ValueError, match='aspect_ratio'):
+        build_scene_plan(item, aspect_ratio='1:1')

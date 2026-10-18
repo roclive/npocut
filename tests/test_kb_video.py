@@ -368,3 +368,21 @@ def test_scene_manifest_accepts_legacy_cwd_relative_image_path(monkeypatch, tmp_
     })
 
     assert loaded == [image.resolve()]
+
+
+@pytest.mark.parametrize('template', ['knowledge-brief', 'vertical-short'])
+def test_finished_template_real_clip_records_config(monkeypatch, tmp_path, template):
+    """Render two genuinely playable alternatives and retain their production settings."""
+    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
+    item = load_library(FIXTURE)[0]
+    out = tmp_path / template
+    assert video.main([item['id'], '--from-json', str(FIXTURE), '--template', template,
+                       '--size', '64x36', '--no-burn', '--out', str(out)]) == 0
+    manifest_path = next(out.glob('*/*/manifest.json'))
+    manifest = json.loads(manifest_path.read_text())
+    final = manifest_path.parent / manifest['files']['final']
+    assert manifest['template']['id'] == template
+    assert manifest['aspect_ratio'] == '16:9'
+    assert probe_json(final)['format']['duration']
+    cues = parse_srt(manifest_path.parent / 'subs.srt')
+    assert cues[-1].end <= manifest['total_duration']
