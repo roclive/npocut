@@ -1236,8 +1236,9 @@ check. `--size`, `--voice`, `--lang`, `--max-points`, `--no-burn`, and `--out` a
 supported. Each run ends with JSON counts (`generated`, `skipped`, `failed`).
 State is saved atomically in `kb_out/autogen_state.json`, and `kb_out/index.html`
 links generated videos with titles, durations and sources. A `.autogen.lock`
-lease prevents overlapping runs and expires after two hours; keep cron runs shorter
-than that. The separate `.autogen.guard` serializes lease acquisition.
+prevents overlapping runs and is held for the process lifetime using `flock`;
+the operating system releases it if the process exits. The separate `.autogen.guard`
+serializes lock acquisition.
 Offline live API runs print `ontokb offline, skipped` and exit 0 (`--strict`: exit 1).
 Invalid snapshots and render failures exit 1. Dry runs print the plan without
 rendering or updating state/gallery. Videos use collision-resistant item folders

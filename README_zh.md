@@ -443,7 +443,7 @@ python3 kb_autogen.py --from-json kb_out/reading.json --limit 3 --kinds article,
 最多尝试 3 次，`--force ID` 可强制重试。支持 `--size`、`--voice`、`--lang`、
 `--max-points`、`--no-burn`、`--out`。状态原子保存于 `kb_out/autogen_state.json`，
 `kb_out/index.html` 展示标题、时长、视频和来源链接；输出采用防碰撞条目目录。
-锁文件 `.autogen.lock` 两小时后过期，定时任务应在两小时内完成；
+锁文件 `.autogen.lock` 由 `flock` 在进程生命周期内持有，进程退出时由操作系统释放；
 `.autogen.guard` 串行保护锁的获取。在线 API 不可达时提示
 `ontokb offline, skipped` 并返回 0，`--strict` 则返回 1；快照错误或渲染失败返回 1。
 `--dry-run` 仅打印计划，不渲染或更新状态及图库。结尾输出一行
