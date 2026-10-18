@@ -265,11 +265,12 @@ def main(argv=None) -> int:
                 digest = content_hash(item, options)
                 old = state.get(item_id, {})
                 changed = old.get('hash') != digest
+                forced = args.force == item_id
                 missing = old.get('status') == 'done' and (not old.get('outputs') or any(
                     not valid_output(args.out, output) for output in old.get('outputs', [])))
                 eligible = (changed or missing or (old.get('status') in ('failed', 'running')
                                                     and old.get('attempts', 0) < MAX_ATTEMPTS)
-                            or args.force == item_id)
+                            or forced)
                 if (not eligible or selected >= args.limit or
                         (args.kinds and item.get('kind') not in args.kinds)):
                     counts['skipped'] += 1
@@ -279,7 +280,9 @@ def main(argv=None) -> int:
                 if args.dry_run:
                     counts['skipped'] += 1
                     continue
-                reusable = old.get('hash') == digest
+                # --force preserves its original CLI meaning: rerender the
+                # selected item even when its content and configuration match.
+                reusable = old.get('hash') == digest and not forced
                 record = dict(hash=digest, config=options, status='running',
                               outputs=list(old.get('outputs', [])) if reusable else [], error=None,
                               completed_formats=dict(old.get('completed_formats', {})) if reusable else {},

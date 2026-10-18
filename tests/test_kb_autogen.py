@@ -68,6 +68,31 @@ def test_failure_retry_cap_and_force(setup, monkeypatch):
     assert state(out)['a']['attempts'] == 4
 
 
+def test_force_rerenders_completed_item(setup, stub_render, monkeypatch):
+    _, out, args = setup
+    real_scenes = autogen.kb_scenes.render_scene_plan
+    scene_calls = 0
+
+    def count_scenes(*call_args, **kwargs):
+        nonlocal scene_calls
+        scene_calls += 1
+        return real_scenes(*call_args, **kwargs)
+
+    monkeypatch.setattr(autogen.kb_scenes, 'render_scene_plan', count_scenes)
+    assert autogen.main(args) == 0
+    first = state(out)['a']
+    assert len(stub_render) == 1
+    assert scene_calls == 1
+
+    assert autogen.main(args + ['--force', 'a']) == 0
+    forced = state(out)['a']
+    assert len(stub_render) == 2
+    assert scene_calls == 2
+    assert forced['hash'] == first['hash']
+    assert forced['attempts'] == first['attempts'] + 1
+    assert forced['status'] == 'done'
+
+
 def test_retry_recovers(setup, monkeypatch):
     _, out, args = setup
     real = autogen.kb_video.render_script
