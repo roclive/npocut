@@ -118,12 +118,18 @@ def scene_manifest_ready(path: Path) -> bool:
     try:
         manifest = json.loads(path.read_text(encoding='utf-8'))
         scenes = manifest['scenes']
-        return bool(scenes) and all(
-            isinstance(scene.get('image'), dict)
-            and not scene['image'].get('blocked_reason')
-            and scene['image'].get('path')
-            and Path(scene['image']['path']).is_file()
-            for scene in scenes)
+        if not scenes:
+            return False
+        for scene in scenes:
+            image = scene.get('image')
+            if (not isinstance(image, dict) or image.get('blocked_reason')
+                    or not image.get('path') or not image.get('sha256')):
+                return False
+            data = Path(image['path']).read_bytes()
+            if (not data.startswith(b'\x89PNG\r\n\x1a\n')
+                    or hashlib.sha256(data).hexdigest() != image['sha256']):
+                return False
+        return True
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
 
