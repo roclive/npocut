@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import hashlib
 import logging
 import time
@@ -21,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from common import FFMPEG, Cue, concat_file_line, probe_duration, write_srt
 from kb_source import DEFAULT_BASE_URL, build_script, fetch_library, load_library, slugify
-from kb_templates import build_template_script, template_config, template_names
+from kb_templates import build_template_script, split_segment, template_names
 
 PAD = 0.4
 SAY_DEFAULT_VOICE = 'Tingting'
@@ -457,6 +458,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                   voice: str | None = None, lang: str | None = None, burn: bool = True,
                   custom_size: bool = False, output_slug: str | None = None, tts: str = "auto",
                   scene_manifest: str | Path | None = None, motion: bool = True) -> Path:
+    script = copy.deepcopy(script)
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
     if any(not isinstance(s, dict) or not isinstance(s.get('narration'), str) for s in script['segments']):
@@ -478,18 +480,57 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
     if custom_size:
         format_name = f'{size[0]}x{size[1]}'
     destination = out.resolve() / slug / format_name
-    scene_images = load_scene_images(scene_manifest, script) if scene_manifest else None
     with tempfile.TemporaryDirectory(prefix='npocut-kb-') as directory:
         tmp = Path(directory)
         audio, slides, durations, boundaries, visual_layers = [], [], [], [], []
         def synthesize_all():
-            durations.clear()
-            boundaries.clear()
-            for i, segment in enumerate(script['segments']):
-                duration, events = cached_speech(segment['narration'], voice, backend,
-                                                 tmp / f'audio-{i}.wav', out.resolve() / '.tts_cache')
-                durations.append(duration)
-                boundaries.append(events)
+            """Synthesize, then enforce template shot and total limits on measured audio."""
+            while True:
+                durations.clear()
+                boundaries.clear()
+                for i, segment in enumerate(script['segments']):
+                    duration, events = cached_speech(segment['narration'], voice, backend,
+                                                     tmp / f'audio-{i}.wav', out.resolve() / '.tts_cache')
+                    durations.append(duration)
+                    boundaries.append(events)
+                template = script.get('template') or {}
+                maximum = (template.get('shot_seconds') or [None, None])[1]
+                oversized = next((i for i, value in enumerate(durations)
+                                  if maximum and value > maximum + .02
+                                  and len(script['segments'][i]['narration']) > 1), None)
+                if oversized is None:
+                    break
+                count = max(2, math.ceil(durations[oversized] / maximum))
+                replacement = split_segment(script['segments'][oversized], maximum, count)
+                if len(replacement) == 1:
+                    break
+                script['segments'][oversized:oversized + 1] = replacement
+
+            limit = template.get('max_duration')
+            if limit and sum(durations) > limit:
+                outro = (len(durations) - 1
+                         if script['segments'][-1].get('kind') == 'outro' else None)
+                reserve = durations[outro] if outro is not None else 0
+                keep, elapsed = [], 0.0
+                stop = outro if outro is not None else len(durations)
+                for index in range(stop):
+                    if elapsed + durations[index] + reserve > limit + .001:
+                        break
+                    keep.append(index)
+                    elapsed += durations[index]
+                if outro is not None:
+                    keep.append(outro)
+                script['segments'] = [script['segments'][i] for i in keep]
+                durations[:] = [durations[i] for i in keep]
+                boundaries[:] = [boundaries[i] for i in keep]
+                for new_index, old_index in enumerate(keep):
+                    if new_index != old_index:
+                        shutil.copyfile(tmp / f'audio-{old_index}.wav',
+                                        tmp / f'audio-kept-{new_index}.wav')
+                for new_index, old_index in enumerate(keep):
+                    if new_index != old_index:
+                        shutil.move(tmp / f'audio-kept-{new_index}.wav',
+                                    tmp / f'audio-{new_index}.wav')
         try:
             synthesize_all()
         except Exception as exc:
@@ -500,6 +541,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             backend = 'say'
             voice = choose_voice(language)
             synthesize_all()
+        scene_images = load_scene_images(scene_manifest, script) if scene_manifest else None
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
             artwork = scene_images[i] if scene_images else None
@@ -565,9 +607,9 @@ def main(argv=None) -> int:
         if args.vertical:
             size = (min(size), max(size))
         if args.script:
-            script = json.loads(args.script.read_text(encoding='utf-8-sig'))
             if args.template:
-                script['template'] = template_config(args.template)
+                raise ValueError('--script cannot be combined with --template; provide source data so template rules can be applied')
+            script = json.loads(args.script.read_text(encoding='utf-8-sig'))
         else:
             library = load_library(args.from_json) if args.from_json else fetch_library(args.base_url)
             item = next((i for i in library if str(i.get('id')) == args.id), None)

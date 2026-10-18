@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import math
+import re
 
 from kb_source import _plain, build_script
 
@@ -56,25 +58,72 @@ def build_template_script(item: dict, name: str, lang: str = 'zh') -> dict:
     outro_segment = candidates[-1] if candidates and candidates[-1].get('kind') == 'outro' else None
     reserve = _estimated_seconds(outro_segment['narration']) if outro_segment else 0
     for segment in candidates:
-        key = _plain(segment.get('narration'))
-        estimate = _estimated_seconds(key)
         is_outro = segment.get('kind') == 'outro'
-        if (key and key not in seen and
-                (is_outro or seconds + estimate + reserve <= config['max_duration'])):
+        pieces = split_segment(segment, config['shot_seconds'][1])
+        for piece in pieces:
+            key = _plain(piece.get('narration'))
+            estimate = _estimated_seconds(key)
+            if not key or key in seen:
+                continue
+            if not is_outro and seconds + estimate + reserve > config['max_duration']:
+                break
             seen.add(key)
-            segments.append(segment)
+            segments.append(piece)
             seconds += estimate
     # A long hook is still preferable to fabricated filler; always retain it and the source page.
     if not segments and candidates:
-        segments.append(candidates[0])
+        segments.extend(split_segment(candidates[0], config['shot_seconds'][1]))
     if outro_segment and outro_segment not in segments:
-        segments.append(outro_segment)
+        segments.extend(split_segment(outro_segment, config['shot_seconds'][1]))
     result = dict(base, segments=segments, template=config)
     return result
 
 
 def _estimated_seconds(text: str) -> float:
     return max(2.0, len(_plain(text)) / 5 + .35)
+
+
+def split_segment(segment: dict, max_seconds: float, parts: int | None = None) -> list[dict]:
+    """Split a source excerpt into shots without paraphrasing or repeating it."""
+    text = _plain(segment.get('narration'))
+    count = parts or max(1, math.ceil(_estimated_seconds(text) / max_seconds))
+    if count == 1 or len(text) < 2:
+        return [copy.deepcopy(segment)]
+    chunks = _split_text(text, count)
+    # Punctuation-aware balancing may still leave a long clause. Re-split only
+    # that clause until every estimated shot respects the preset ceiling.
+    while any(_estimated_seconds(chunk) > max_seconds and len(chunk) > 1 for chunk in chunks):
+        refined = []
+        for chunk in chunks:
+            refined.extend(_split_text(chunk, 2)
+                           if _estimated_seconds(chunk) > max_seconds and len(chunk) > 1
+                           else [chunk])
+        chunks = refined
+    result = []
+    for index, chunk in enumerate(chunks):
+        shot = copy.deepcopy(segment)
+        shot['narration'] = chunk
+        shot['text'] = chunk
+        if index:
+            shot['heading'] = f"{segment.get('heading', '')} · {index + 1}/{len(chunks)}"
+        result.append(shot)
+    return result
+
+
+def _split_text(text: str, count: int) -> list[str]:
+    """Make roughly even nonempty chunks, preferring punctuation boundaries."""
+    chunks, remaining = [], text
+    for slots in range(count, 1, -1):
+        target = max(1, round(len(remaining) / slots))
+        boundaries = [match.end() for match in re.finditer(r'[。！？.!?；;，,、]\s*', remaining)]
+        usable = [point for point in boundaries if 0 < point < len(remaining)]
+        point = min(usable, key=lambda value: abs(value - target)) if usable else target
+        point = min(max(1, point), len(remaining) - (slots - 1))
+        chunks.append(remaining[:point].strip())
+        remaining = remaining[point:].strip()
+    if remaining:
+        chunks.append(remaining)
+    return [chunk for chunk in chunks if chunk]
 
 
 def template_names() -> tuple[str, ...]:

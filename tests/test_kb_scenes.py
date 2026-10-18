@@ -134,6 +134,8 @@ def test_three_finished_templates_are_distinct_source_backed_and_bounded(item):
         assert plan['template']['id'] == name
         assert plan['aspect_ratio'] == '9:16'
         assert plan['total_duration'] <= plan['template']['max_duration']
+        assert all(scene['duration'] <= plan['template']['shot_seconds'][1]
+                   for scene in plan['scenes'])
         narration = [s['narration']['text'] for s in plan['scenes']]
         assert len(narration) == len(set(narration))
         assert plan['scenes'][-1]['source']['editorial']
@@ -149,3 +151,12 @@ def test_template_validation_and_legacy_preserved(item):
         build_scene_plan(item, template='loud-clickbait')
     with pytest.raises(ValueError, match='aspect_ratio'):
         build_scene_plan(item, aspect_ratio='1:1')
+
+
+def test_long_first_fact_is_split_instead_of_dropped(item):
+    changed = dict(item, key_points=['这是来自源内容的超长首段。' * 40])
+    script = build_template_script(changed, 'vertical-short')
+    assert script['segments'][0]['kind'] == 'hook'
+    assert '这是来自源内容' in script['segments'][0]['narration']
+    assert script['segments'][-1]['kind'] == 'outro'
+    assert all(len(segment['narration']) > 0 for segment in script['segments'])

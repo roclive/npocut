@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 import kb_video as video
 from common import parse_srt, probe_json
 from kb_source import load_library
+from kb_templates import build_template_script
 
 FIXTURE = ROOT / 'tests/fixtures/ontokb_reading.json'
 
@@ -99,6 +100,15 @@ def test_script_cli_offline(monkeypatch, tmp_path):
     monkeypatch.setattr(video, 'fetch_library', lambda *a: pytest.fail('must stay offline'))
     assert video.main(['custom', '--script', str(path), '--size', '64x36',
                        '--no-burn', '--out', str(tmp_path / 'out')]) == 0
+
+
+def test_script_and_template_are_rejected(tmp_path, capsys):
+    path = tmp_path / 'script.json'
+    path.write_text(json.dumps({'segments': [{'narration': 'source fact'}]}))
+    with pytest.raises(SystemExit) as raised:
+        video.main(['custom', '--script', str(path), '--template', 'vertical-short'])
+    assert raised.value.code == 1
+    assert 'cannot be combined' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('size', [(321, 180), (0, 0)])
@@ -370,19 +380,58 @@ def test_scene_manifest_accepts_legacy_cwd_relative_image_path(monkeypatch, tmp_
     assert loaded == [image.resolve()]
 
 
-@pytest.mark.parametrize('template', ['knowledge-brief', 'vertical-short'])
-def test_finished_template_real_clip_records_config(monkeypatch, tmp_path, template):
-    """Render two genuinely playable alternatives and retain their production settings."""
-    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
-    item = load_library(FIXTURE)[0]
+@pytest.mark.parametrize('template,vertical', [('knowledge-brief', False),
+                                                ('vertical-short', True)])
+def test_finished_template_real_clip_records_config(monkeypatch, tmp_path, template, vertical):
+    """Use macOS speech and burned subtitles for two production-like visual proofs."""
+    monkeypatch.delenv('NPOCUT_FAKE_TTS', raising=False)
+    if not shutil.which('say'):
+        pytest.skip('macOS say is required for the real-TTS acceptance clip')
+    item = {'id': 'real-proof', 'title': 'AI 培训计划', 'url': 'https://example.test/source',
+            'summary': '该计划提供四天培训，并安排后续实践。',
+            'key_points': ['项目计划在二零二七年底前培养一万人。'], 'categories': ['AI']}
+    fixture = tmp_path / 'real.json'
+    fixture.write_text(json.dumps([item], ensure_ascii=False))
     out = tmp_path / template
-    assert video.main([item['id'], '--from-json', str(FIXTURE), '--template', template,
-                       '--size', '64x36', '--no-burn', '--out', str(out)]) == 0
+    args = [item['id'], '--from-json', str(fixture), '--template', template,
+            '--size', '640x360', '--tts', 'say', '--out', str(out)]
+    if vertical:
+        args.append('--vertical')
+    assert video.main(args) == 0
     manifest_path = next(out.glob('*/*/manifest.json'))
     manifest = json.loads(manifest_path.read_text())
     final = manifest_path.parent / manifest['files']['final']
     assert manifest['template']['id'] == template
-    assert manifest['aspect_ratio'] == '16:9'
-    assert probe_json(final)['format']['duration']
+    assert manifest['aspect_ratio'] == ('9:16' if vertical else '16:9')
+    assert manifest['tts_backend'] == 'say' and manifest['voice'] != 'fake'
+    assert final.name.endswith('.subbed.mp4')
+    media_duration = float(probe_json(final)['format']['duration'])
+    assert abs(media_duration - sum(manifest['durations'])) < .5
+    assert media_duration <= manifest['template']['max_duration'] + .05
+    assert max(manifest['durations']) <= manifest['template']['shot_seconds'][1] + .05
     cues = parse_srt(manifest_path.parent / 'subs.srt')
-    assert cues[-1].end <= manifest['total_duration']
+    assert cues[-1].end <= media_duration
+    # Decode a cue midpoint from the burned deliverable. Bright subtitle glyphs
+    # must be visible inside the reserved bottom area at a readable font size.
+    from PIL import Image
+    frame = tmp_path / f'{template}.png'
+    midpoint = (cues[0].start + cues[0].end) / 2
+    video.ffmpeg('-ss', midpoint, '-i', final, '-frames:v', 1, frame)
+    with Image.open(frame) as image:
+        lower = image.convert('RGB').crop((0, int(image.height * .80), image.width, image.height))
+        assert video.subtitle_font_size(image.size) >= 13
+        assert sum(max(pixel) > 210 for pixel in lower.getdata()) > 5
+
+
+def test_measured_slow_tts_is_recut_to_template_limits(monkeypatch, tmp_path):
+    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
+    original = video.speech_weight
+    monkeypatch.setattr(video, 'speech_weight', lambda text: original(text) * 3)
+    item = load_library(FIXTURE)[0]
+    script = build_template_script(item, 'vertical-short')
+    final = video.render_script(script, out=tmp_path, size=(64, 36), burn=False)
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    assert sum(manifest['durations']) <= 45.001
+    assert max(manifest['durations']) <= 8.02
+    assert manifest['script']['segments'][0]['kind'] == 'hook'
+    assert manifest['script']['segments'][-1]['kind'] == 'outro'
