@@ -16,7 +16,7 @@ FIXTURE = ROOT / 'tests/fixtures/ontokb_reading.json'
 
 
 @pytest.mark.parametrize('vertical', [False, True])
-def test_render_fixture(monkeypatch, tmp_path, vertical):
+def test_render_fixture(monkeypatch, tmp_path, vertical, capsys):
     monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
     item = load_library(FIXTURE)[0]
     args = [str(item['id']), '--from-json', str(FIXTURE), '--size', '320x180',
@@ -24,6 +24,10 @@ def test_render_fixture(monkeypatch, tmp_path, vertical):
     if vertical:
         args += ['--vertical', '--no-burn']
     assert video.main(args) == 0
+    progress = capsys.readouterr().err
+    phases = [f'{video.PHASE_PREFIX}{name}' for name in ('narration', 'images', 'combine')]
+    assert all(phase in progress for phase in phases)
+    assert [progress.index(phase) for phase in phases] == sorted(progress.index(phase) for phase in phases)
     directory = next(tmp_path.iterdir()) / ('180x320' if vertical else '320x180')
     manifest = json.loads((directory / 'manifest.json').read_text())
     final = directory / manifest['files']['final']

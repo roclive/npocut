@@ -18,7 +18,11 @@ export function createJobs() {
     start(child, detail = {}) {
       const job = { id: randomUUID(), ...detail, status: 'running', log: '', outputs: [] };
       jobs.set(job.id, job);
-      const append = chunk => { job.log = (job.log + chunk.toString()).slice(-16000); };
+      const append = chunk => {
+        job.log = (job.log + chunk.toString()).slice(-16000);
+        const phases = [...job.log.matchAll(/(?:^|\n)NPOCUT_PHASE:(narration|images|combine)(?=\r?$)/gm)];
+        if (phases.length) job.phase = phases.at(-1)[1];
+      };
       child.stdout?.on('data', append); child.stderr?.on('data', append);
       child.once('error', error => { append(error.message); job.status = 'failed'; });
       child.once('close', code => { if (job.status === 'running') job.status = code === 0 ? 'done' : 'failed'; });
@@ -138,7 +142,14 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
         const snapshot = `web-source-${createHash('sha256').update(content).digest('hex').slice(0, 16)}.json`;
         try { await writeFile(path.join(out, snapshot), content, { flag: 'wx' }); }
         catch (error) { if (error.code !== 'EEXIST') throw error; }
-        json(res, 200, { source: snapshot, library: items.map(item => ({ id: String(item.id), title: item.title, kind: item.kind, summary: item.summary, key_points_count: Array.isArray(item.key_points) ? item.key_points.length : 0, autogen: state[String(item.id)] || null })) });
+        json(res, 200, { source: snapshot, library: items.map(item => ({
+          id: String(item.id),
+          title: item.title == null ? '' : String(item.title),
+          kind: item.kind == null ? '' : String(item.kind),
+          summary: item.summary == null ? '' : String(item.summary),
+          key_points_count: Array.isArray(item.key_points) ? item.key_points.length : 0,
+          autogen: state[String(item.id)] || null,
+        })) });
       } else if (url.pathname === '/api/kb/generate' && req.method === 'POST') {
         const data = await body(req);
         if (typeof data.id !== 'string' || !data.id || (data.vertical !== undefined && typeof data.vertical !== 'boolean') || (data.lang !== undefined && !['zh', 'ja', 'en'].includes(data.lang)) || (data.voice !== undefined && (typeof data.voice !== 'string' || data.voice.length > 200))) throw new Error('Invalid generation options');

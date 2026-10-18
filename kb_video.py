@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from PIL import Image, ImageDraw, ImageFont
@@ -24,6 +25,12 @@ from kb_source import DEFAULT_BASE_URL, build_script, fetch_library, load_librar
 
 PAD = 0.4
 SAY_DEFAULT_VOICE = 'Tingting'
+PHASE_PREFIX = 'NPOCUT_PHASE:'
+
+
+def report_phase(phase: str) -> None:
+    """Emit a machine-readable progress event for web and CLI consumers."""
+    print(f'{PHASE_PREFIX}{phase}', file=sys.stderr, flush=True)
 
 
 def ffmpeg(*args: object, cwd: Path | None = None) -> None:
@@ -381,6 +388,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                                                  tmp / f'audio-{i}.wav', out.resolve() / '.tts_cache')
                 durations.append(duration)
                 boundaries.append(events)
+        report_phase('narration')
         try:
             synthesize_all()
         except Exception as exc:
@@ -391,11 +399,13 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             backend = 'say'
             voice = choose_voice(language)
             synthesize_all()
+        report_phase('images')
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
             draw_slide(script, segment, i, size, slide, style)
             audio.append(wav)
             slides.append(slide)
+        report_phase('combine')
         video = assemble(slides, audio, durations, tmp)
         make_subtitles(script, durations, tmp / 'subs.srt', size, boundaries)
         final = tmp / f'{slug}.subbed.mp4' if burn else video

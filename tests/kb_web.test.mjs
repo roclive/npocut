@@ -29,6 +29,25 @@ test('jobs handle success, nonzero exit, spawn error and bounded log', () => {
   const missing = child(), error = jobs.start(missing); missing.emit('error', new Error('ENOENT')); missing.emit('close', 0); assert.equal(error.status, 'failed');
 });
 
+test('jobs expose the latest structured render phase even when a marker is split across chunks', () => {
+  const jobs = createJobs();
+  const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+  const job = jobs.start(child);
+  child.stderr.emit('data', 'NPOCUT_PHASE:narration\n');
+  assert.equal(job.phase, 'narration');
+  child.stderr.emit('data', 'NPOCUT_PHASE:ima');
+  child.stderr.emit('data', 'ges\nNPOCUT_PHASE:combine\n');
+  assert.equal(job.phase, 'combine');
+});
+
+test('frontend search stringifies non-text OntoKB fields and uses the structured phase', async () => {
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /String\(item\.title \?\? ''\)\.toLowerCase\(\)/);
+  assert.match(source, /String\(item\.summary \?\? ''\)\.toLowerCase\(\)/);
+  assert.match(source, /\[job\.phase\]/);
+  assert.doesNotMatch(source, /job\.log\.includes\(['"]Narration/);
+});
+
 test('configuration guidance names the implemented OpenAI settings and never the removed SD URL', async () => {
   const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
   assert.match(source, /KB_IMAGE_PROVIDER=openai/);
@@ -93,6 +112,8 @@ print(json.dumps({'edge':[{'name':'ja-JP-KeitaNeural','label':'Keita','gender':'
     const different = await (await post('/api/kb/library', { library: [{ id: 'other' }] })).json();
     assert.notEqual(different.source, library.source);
     assert.equal((await readdir(path.join(dir, 'kb_out'))).filter(name => name.startsWith('web-source-')).length, 2);
+    const unusual = await (await post('/api/kb/library', { library: [{ id: 7, title: 42, summary: ['hello'], kind: { type: 'note' } }] })).json();
+    assert.deepEqual(unusual.library[0], { id: '7', title: '42', summary: 'hello', kind: '[object Object]', key_points_count: 0, autogen: null });
     for (const source of ['web-source-1234.json', 'web-source-0123456789abcdef0.json', 'web-source-01234567-89ab-cdef.json', 'web-source-ABCDEF0123456789.json', '../' + library.source, 'reading.json']) {
       await writeFile(path.join(dir, 'kb_out', path.basename(source)), '{}');
       const rejected = await post('/api/kb/generate', { id: 'article', source });

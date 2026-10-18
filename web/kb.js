@@ -119,10 +119,10 @@ function renderLibrary(library) {
   currentLibrary = library;
   const query = searchInput.value.toLowerCase();
   list.replaceChildren();
-  
-  const filtered = library.filter(item => 
-    (item.title || '').toLowerCase().includes(query) || 
-    (item.summary || '').toLowerCase().includes(query)
+
+  const filtered = library.filter(item =>
+    String(item.title ?? '').toLowerCase().includes(query) ||
+    String(item.summary ?? '').toLowerCase().includes(query)
   );
 
   for (const item of filtered) {
@@ -141,44 +141,44 @@ function renderLibrary(library) {
       btn.type = 'button';
       btn.onclick = async () => {
         if (voiceSelect.disabled || !voiceSelect.value) { status.textContent = '请先选择可用声音'; return; }
-        
+
         const buttons = actions.querySelectorAll('button');
         buttons.forEach(b => { b.disabled = true; });
-        log.hidden = false; 
-        log.textContent = ''; 
+        log.hidden = false;
+        log.textContent = '';
         status.textContent = '正在启动…';
         
         try {
-          const job = await api('/api/kb/generate', { 
-            id: item.id, 
-            source, 
+          const job = await api('/api/kb/generate', {
+            id: item.id,
+            source,
             vertical: aspectSelect.value === 'vertical',
             size: qualitySelect.value,
             style: styleSelect.value,
-            lang: langSelect.value, 
-            tts: ttsSelect.value, 
-            voice: voiceSelect.value 
+            lang: langSelect.value,
+            tts: ttsSelect.value,
+            voice: voiceSelect.value
           });
           storage.set(`npocut-kb-${item.id}`, job.id);
           await monitor(job.id, item, status, log, actions, preview);
-        } catch (error) { 
-          status.textContent = `生成失败：${error.message}`; 
-        } finally { 
-          buttons.forEach(b => { b.disabled = false; }); 
+        } catch (error) {
+          status.textContent = `生成失败：${error.message}`;
+        } finally {
+          buttons.forEach(b => { b.disabled = false; });
         }
       };
       return btn;
     };
 
     actions.append(generateBtn());
-    row.append(title, badge, summary, status, actions, log, preview); 
+    row.append(title, badge, summary, status, actions, log, preview);
     list.append(row);
 
     const previous = storage.get(`npocut-kb-${item.id}`);
     if (previous) {
-      monitor(previous, item, status, log, actions, preview).catch(error => { 
-        status.textContent = error.message; 
-        storage.remove(`npocut-kb-${item.id}`); 
+      monitor(previous, item, status, log, actions, preview).catch(error => {
+        status.textContent = error.message;
+        storage.remove(`npocut-kb-${item.id}`);
       });
     }
   }
@@ -194,29 +194,30 @@ async function monitor(id, item, status, log, actions, preview) {
     for (;;) {
       const job = await api(`/api/kb/jobs/${encodeURIComponent(id)}`);
       
-      let phase = '生成中…';
-      if (job.log.includes('Narration')) phase = '🎙️ 生成旁白';
-      else if (job.log.includes('Image')) phase = '🖼️ 生成画面';
-      else if (job.log.includes('Combine')) phase = '🎬 合成视频';
-      
+      const phase = {
+        narration: '🎙️ 生成旁白',
+        images: '🖼️ 生成画面',
+        combine: '🎬 合成视频',
+      }[job.phase] || '生成中…';
+
       log.textContent = job.log || '正在准备…';
       status.textContent = job.status === 'running' ? phase : { done: '已生成', failed: '生成失败' }[job.status] || job.status;
 
       if (job.status !== 'running') {
-        if (job.status === 'done') { 
-          showOutputs(preview, job.outputs); 
-          status.textContent = ['已生成', narrationInfo(job)].filter(Boolean).join(' · '); 
+        if (job.status === 'done') {
+          showOutputs(preview, job.outputs);
+          status.textContent = ['已生成', narrationInfo(job)].filter(Boolean).join(' · ');
         } else if (job.status === 'failed') {
           const reason = (job.log || '').trim().split(/\r?\n/).filter(Boolean).at(-1) || '未知错误';
           status.textContent = `生成失败：${reason}。可点击“生成视频”重试。`;
         }
-        storage.remove(`npocut-kb-${item.id}`); 
+        storage.remove(`npocut-kb-${item.id}`);
         break;
       }
       await new Promise(resolve => setTimeout(resolve, 1200));
     }
-  } finally { 
-    buttons.forEach(b => { b.disabled = false; }); 
+  } finally {
+    buttons.forEach(b => { b.disabled = false; });
   }
 }
 
