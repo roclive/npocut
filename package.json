@@ -190,6 +190,14 @@
         "to": "npocut-cli/kb_images.py"
       },
       {
+        "from": "kb_scenes.py",
+        "to": "npocut-cli/kb_scenes.py"
+      },
+      {
+        "from": "kb_templates.py",
+        "to": "npocut-cli/kb_templates.py"
+      },
+      {
         "from": "requirements-images.txt",
         "to": "npocut-cli/requirements-images.txt"
       },

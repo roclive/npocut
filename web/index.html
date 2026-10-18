@@ -58,7 +58,8 @@
             <label>声音 <select id="kbVoice" aria-label="声音" disabled><option>正在加载…</option></select></label>
             <span id="kbVoiceMessage" role="status"></span>
             <label>画幅 <select id="kbAspect"><option value="landscape">横屏 16:9</option><option value="vertical">竖屏 9:16</option></select></label>
-            <label>清晰度 <select id="kbQuality"><option value="1920x1080">1080p</option><option value="1280x720">720p（更快）</option></select></label>
+            <label>清晰度 <select id="kbQuality"><option value="1280x720">720p（默认，更快）</option><option value="1920x1080">1080p</option></select></label>
+            <label>分镜模板 <select id="kbTemplate"><option value="knowledge-brief">知识简报 · 最多 90 秒</option><option value="concept-explainer">概念讲解 · 最多 150 秒</option><option value="vertical-short">竖版短视频 · 最多 45 秒</option></select></label>
             <label>画面样式 <select id="kbStyle"><option value="editorial">深蓝编辑</option><option value="paper">暖纸质感</option><option value="contrast">高对比</option></select></label>
           </div>
           <div class="config-group image-config">
@@ -70,6 +71,8 @@
         <figure id="kbStylePreview" class="kb-style-preview" data-style="editorial" aria-label="样式预览">
           <span>样式预览</span><strong>知识，让行动更清晰</strong><small>ONTO KB · 01 / 06</small>
         </figure>
+
+        <p class="kb-cost-note">默认只生成低成本的分镜计划；调用图片后端前会显示确切张数。图片不可用时仍可使用模板背景生成视频。</p>
 
         <p id="kbMessage" role="status"></p>
         <div id="kbLibrary" class="kb-library"></div>

@@ -101,7 +101,8 @@ def build_scene_plan(item: dict, script: dict | None = None, *, durations=None,
                 scenes=scenes)
 
 
-def render_scene_plan(plan: dict, output: str | Path, *, cache_dir=None, config=None) -> dict:
+def render_scene_plan(plan: dict, output: str | Path, *, cache_dir=None, config=None,
+                      only_indexes=None, existing=None, force_indexes=None) -> dict:
     """Render independently; fallback results are not cached as successful AI assets."""
     config = config or kb_images.Config.from_env()
     output = Path(output)
@@ -109,7 +110,13 @@ def render_scene_plan(plan: dict, output: str | Path, *, cache_dir=None, config=
     cache = Path(cache_dir) if cache_dir is not None else output / 'image-cache'
     cache.mkdir(parents=True, exist_ok=True)
     manifest = dict(plan, scenes=[])
-    for scene in plan['scenes']:
+    only_indexes = None if only_indexes is None else set(only_indexes)
+    force_indexes = set(force_indexes or ())
+    previous = {scene.get('id'): scene for scene in (existing or {}).get('scenes', [])}
+    for index, scene in enumerate(plan['scenes']):
+        if only_indexes is not None and index not in only_indexes:
+            manifest['scenes'].append(previous.get(scene.get('id'), scene))
+            continue
         request = dict(content_hash=plan['content_hash'], source=scene['source'],
                        provider=config.provider, model=config.model, prompt=scene['prompt'],
                        negative_prompt=scene['negative_prompt'], style=scene['style'],
@@ -119,6 +126,8 @@ def render_scene_plan(plan: dict, output: str | Path, *, cache_dir=None, config=
         metadata = path.with_suffix('.json')
         asset = None
         try:
+            if index in force_indexes:
+                raise FileNotFoundError
             saved = json.loads(metadata.read_text(encoding='utf-8'))
             if (isinstance(saved, dict) and not saved.get('blocked_reason') and path.is_file()
                     and saved['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest()
@@ -155,6 +164,10 @@ def main(argv=None):
     parser.add_argument('--template', choices=template_names())
     parser.add_argument('--aspect-ratio', choices=('16:9', '9:16'), default='16:9')
     parser.add_argument('--plan-only', action='store_true')
+    parser.add_argument('--scene', type=int, action='append',
+                        help='generate only this 1-based scene; may be repeated')
+    parser.add_argument('--force-scene', action='store_true',
+                        help='ignore the selected scene cache')
     args = parser.parse_args(argv)
     try:
         item = next((v for v in load_library(args.from_json) if str(v.get('id')) == args.id), None)
@@ -164,13 +177,23 @@ def main(argv=None):
         plan = build_scene_plan(item, script, template=args.template,
                                 aspect_ratio=args.aspect_ratio)
         args.out.mkdir(parents=True, exist_ok=True)
+        if args.scene and any(index < 1 or index > len(plan['scenes']) for index in args.scene):
+            raise ValueError('scene number is out of range')
         if args.plan_only:
             (args.out / 'scene-manifest.json').write_text(json.dumps(plan, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         else:
             config = kb_images.Config.from_env()
             if args.provider:
                 config = kb_images.Config(args.provider, config.model, config.timeout)
-            render_scene_plan(plan, args.out, cache_dir=args.cache_dir, config=config)
+            target = args.out / 'scene-manifest.json'
+            try:
+                existing = json.loads(target.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                existing = None
+            selected = {index - 1 for index in args.scene} if args.scene else None
+            render_scene_plan(plan, args.out, cache_dir=args.cache_dir, config=config,
+                              only_indexes=selected, existing=existing,
+                              force_indexes=selected if args.force_scene else None)
         print(args.out / 'scene-manifest.json')
     except (ValueError, OSError) as error:
         parser.exit(1, f'kb_scenes: {error}\n')

@@ -89,6 +89,63 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
       });
     });
   }
+  const templates = new Set(['knowledge-brief', 'concept-explainer', 'vertical-short']);
+  async function snapshot(value) {
+    if (!/^web-source-[a-f0-9]{16}\.json$/.test(value || '')) throw new Error('Invalid snapshot');
+    return safeKbFile(out, value);
+  }
+  function storyboardLocation(data) {
+    if (!templates.has(data.template)) throw new Error('Invalid storyboard template');
+    const aspect = data.vertical ? '9:16' : '16:9';
+    const key = createHash('sha256').update(`${data.source}\0${data.id}\0${data.template}\0${aspect}`).digest('hex').slice(0, 16);
+    return { aspect, relative: `storyboards/${key}/scene-manifest.json`, directory: path.join(out, 'storyboards', key) };
+  }
+  async function publicStoryboard(relative) {
+    const target = await safeKbFile(out, relative);
+    const manifest = JSON.parse(await readFile(target, 'utf8'));
+    return {
+      template: manifest.template,
+      aspect_ratio: manifest.aspect_ratio,
+      total_duration: manifest.total_duration,
+      manifest: relative,
+      scenes: (manifest.scenes || []).map((scene, index) => {
+        const value = scene.image?.path;
+        let image = null;
+        if (value) {
+          const absolute = path.resolve(value);
+          const candidate = path.relative(out, absolute);
+          if (candidate && !candidate.startsWith('..') && !path.isAbsolute(candidate)) image = candidate;
+        }
+        return { index, id: scene.id, theme: scene.theme, duration: scene.duration,
+                 narration: scene.narration?.text || '', image,
+                 ai_generated: !!scene.image?.ai_generated,
+                 cache_hit: !!scene.image?.cache_hit,
+                 blocked_reason: scene.image?.blocked_reason || null };
+      }),
+    };
+  }
+  function storyboardArgs(data, location, planOnly = false) {
+    const args = [path.join(cliRoot, 'kb_scenes.py'), data.id, '--from-json', data.snapshot,
+                  '--out', location.directory, '--template', data.template,
+                  '--aspect-ratio', location.aspect];
+    if (planOnly) args.push('--plan-only');
+    if (data.scene !== undefined) args.push('--scene', String(data.scene + 1), '--force-scene');
+    return args;
+  }
+  function runCommand(args, timeout = 20000) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(python, args, { cwd: workDir, env: { ...env, PYTHONUNBUFFERED: '1' } });
+      let stderr = '';
+      const timer = setTimeout(() => { child.kill(); reject(new Error('Storyboard planning timed out')); }, timeout);
+      child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-4000); });
+      child.once('error', error => { clearTimeout(timer); reject(error); });
+      child.once('close', code => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else reject(new Error(stderr.trim().split(/\r?\n/).at(-1) || 'Storyboard planning failed'));
+      });
+    });
+  }
   const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
   async function body(req) {
     let text = '';
@@ -125,7 +182,8 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
           if (start < 0 || start > end || start >= info.size) { res.writeHead(416, { 'Content-Range': `bytes */${info.size}` }); res.end(); return true; }
           status = 206;
         }
-        res.writeHead(status, { 'Content-Type': file.endsWith('.mp4') ? 'video/mp4' : 'application/octet-stream', 'Accept-Ranges': 'bytes', 'Content-Length': info.size ? end - start + 1 : 0, ...(status === 206 ? { 'Content-Range': `bytes ${start}-${end}/${info.size}` } : {}) });
+        const contentType = file.endsWith('.mp4') ? 'video/mp4' : file.endsWith('.png') ? 'image/png' : 'application/octet-stream';
+        res.writeHead(status, { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Content-Length': info.size ? end - start + 1 : 0, ...(status === 206 ? { 'Content-Range': `bytes ${start}-${end}/${info.size}` } : {}) });
         if (req.method === 'HEAD' || !info.size) res.end(); else createReadStream(file, { start, end }).on('error', () => res.destroy()).pipe(res);
       } else if (url.pathname === '/api/kb/library' && ['GET', 'POST'].includes(req.method)) {
         const payload = req.method === 'POST' ? await body(req) : await library();
@@ -150,6 +208,31 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
           key_points_count: Array.isArray(item.key_points) ? item.key_points.length : 0,
           autogen: state[String(item.id)] || null,
         })) });
+      } else if (url.pathname === '/api/kb/storyboard' && req.method === 'POST') {
+        const data = await body(req);
+        if (typeof data.id !== 'string' || !data.id || typeof data.vertical !== 'boolean') throw new Error('Invalid storyboard options');
+        data.snapshot = await snapshot(data.source);
+        const location = storyboardLocation(data);
+        await mkdir(location.directory, { recursive: true });
+        try { await stat(await safeKbFile(out, location.relative)); }
+        catch { await runCommand(storyboardArgs(data, location, true)); }
+        json(res, 200, await publicStoryboard(location.relative));
+      } else if (url.pathname === '/api/kb/storyboard/generate' && req.method === 'POST') {
+        const data = await body(req);
+        if (typeof data.id !== 'string' || !data.id || typeof data.vertical !== 'boolean' ||
+            (data.scene !== undefined && (!Number.isInteger(data.scene) || data.scene < 0 || data.scene > 999))) throw new Error('Invalid storyboard options');
+        data.snapshot = await snapshot(data.source);
+        const location = storyboardLocation(data);
+        await stat(await safeKbFile(out, location.relative));
+        const child = spawn(python, storyboardArgs(data, location), { cwd: workDir, env: { ...env, PYTHONUNBUFFERED: '1' } });
+        const job = jobs.start(child, { itemId: data.id, kind: 'storyboard', manifest: location.relative, scene: data.scene ?? null });
+        child.once('close', async () => {
+          if (job.status === 'done') {
+            try { job.storyboard = await publicStoryboard(location.relative); }
+            catch (error) { job.status = 'failed'; job.log += `\nCould not read storyboard: ${error.message}`; }
+          }
+        });
+        json(res, 202, { id: job.id, image_count: data.scene === undefined ? (await publicStoryboard(location.relative)).scenes.length : 1 });
       } else if (url.pathname === '/api/kb/generate' && req.method === 'POST') {
         const data = await body(req);
         if (typeof data.id !== 'string' || !data.id || (data.vertical !== undefined && typeof data.vertical !== 'boolean') || (data.lang !== undefined && !['zh', 'ja', 'en'].includes(data.lang)) || (data.voice !== undefined && (typeof data.voice !== 'string' || data.voice.length > 200))) throw new Error('Invalid generation options');
@@ -162,8 +245,7 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
         if (data.id.startsWith('-')) throw new Error('Invalid item id');
         const args = [path.join(cliRoot, 'kb_video.py'), data.id, '--out', out];
         if (data.source) {
-          if (!/^web-source-[a-f0-9]{16}\.json$/.test(data.source)) throw new Error('Invalid snapshot');
-          args.push('--from-json', await safeKbFile(out, data.source));
+          args.push('--from-json', await snapshot(data.source));
         } else if (process.env.ONTOKB_FROM_JSON) args.push('--from-json', process.env.ONTOKB_FROM_JSON);
         else args.push('--base-url', process.env.ONTOKB_URL || 'http://127.0.0.1:8765');
         const catalog = await voices(data.lang || 'zh');
@@ -175,6 +257,15 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
         if (data.style) args.push('--style', data.style);
         if (data.vertical) args.push('--vertical');
         if (data.lang) args.push('--lang', data.lang);
+        if (data.template !== undefined) {
+          if (!templates.has(data.template)) throw new Error('Invalid video template');
+          args.push('--template', data.template);
+        }
+        if (data.sceneManifest !== undefined) {
+          const expected = storyboardLocation(data).relative;
+          if (data.sceneManifest !== expected) throw new Error('Invalid storyboard manifest');
+          args.push('--scenes', await safeKbFile(out, data.sceneManifest));
+        }
         const child = spawn(python, args, { cwd: workDir, env: { ...env, PYTHONUNBUFFERED: '1' } });
         const job = jobs.start(child, { itemId: data.id, vertical: !!data.vertical });
         child.once('close', async () => {
