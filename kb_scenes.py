@@ -35,6 +35,8 @@ def build_scene_plan(item: dict, script: dict | None = None, *, durations=None,
         raise ValueError('style must contain 1–500 characters')
     if aspect_ratio not in ('16:9', '9:16'):
         raise ValueError('aspect_ratio must be 16:9 or 9:16')
+    if script is not None and template:
+        raise ValueError('--script cannot be combined with --template; provide source data so template rules can be applied')
     if template and script is None:
         script = build_template_script(item, template)
     else:

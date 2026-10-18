@@ -147,10 +147,25 @@ def test_three_finished_templates_are_distinct_source_backed_and_bounded(item):
 
 def test_template_validation_and_legacy_preserved(item):
     assert build_scene_plan(item)['template']['id'] == 'legacy'
+    legacy_script = build_script(item)
+    with pytest.raises(ValueError, match='cannot be combined'):
+        build_scene_plan(item, legacy_script, template='vertical-short')
     with pytest.raises(ValueError, match='Unknown template'):
         build_scene_plan(item, template='loud-clickbait')
     with pytest.raises(ValueError, match='aspect_ratio'):
         build_scene_plan(item, aspect_ratio='1:1')
+
+
+def test_scene_cli_rejects_script_with_template(item, tmp_path, capsys):
+    snapshot = Path(__file__).parent / 'fixtures/ontokb_reading.json'
+    script = tmp_path / 'legacy-script.json'
+    script.write_text(json.dumps(build_script(item)), encoding='utf-8')
+    with pytest.raises(SystemExit) as raised:
+        main([item['id'], '--from-json', str(snapshot), '--script', str(script),
+              '--template', 'vertical-short', '--out', str(tmp_path / 'out'), '--plan-only'])
+    assert raised.value.code == 1
+    assert 'cannot be combined' in capsys.readouterr().err
+    assert not (tmp_path / 'out' / 'scene-manifest.json').exists()
 
 
 def test_long_first_fact_is_split_instead_of_dropped(item):
