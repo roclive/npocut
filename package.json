@@ -188,6 +188,14 @@
       {
         "from": "kb_images.py",
         "to": "npocut-cli/kb_images.py"
+      },
+      {
+        "from": "requirements-images.txt",
+        "to": "npocut-cli/requirements-images.txt"
+      },
+      {
+        "from": "docs/kb-images.md",
+        "to": "npocut-cli/docs/kb-images.md"
       }
     ],
     "mac": {

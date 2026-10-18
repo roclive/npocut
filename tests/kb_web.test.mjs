@@ -98,6 +98,16 @@ test('configuration guidance names the implemented OpenAI settings and never the
   assert.doesNotMatch(source, /ONTOKB_IMAGE_URL|Stable Diffusion/);
 });
 
+test('packaged image backend includes its optional requirements and setup documentation', async () => {
+  const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const resources = new Map(packageJson.build.extraResources.map(({ from, to }) => [from, to]));
+  assert.equal(resources.get('kb_images.py'), 'npocut-cli/kb_images.py');
+  assert.equal(resources.get('requirements-images.txt'), 'npocut-cli/requirements-images.txt');
+  assert.equal(resources.get('docs/kb-images.md'), 'npocut-cli/docs/kb-images.md');
+  await assert.doesNotReject(readFile(new URL('../requirements-images.txt', import.meta.url), 'utf8'));
+  await assert.doesNotReject(readFile(new URL('../docs/kb-images.md', import.meta.url), 'utf8'));
+});
+
 test('frontend uses the image doctor endpoint instead of a timed ready state', async () => {
   const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
   assert.match(source, /api\('\/api\/kb\/image-status'\)/);
