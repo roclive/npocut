@@ -47,6 +47,7 @@ def build_template_script(item: dict, name: str, lang: str = 'zh') -> dict:
     for segment in base['segments']:
         {'title': title, 'summary': summaries, 'point': points,
          'outro': outro}[segment['kind']].append(segment)
+    points = [point for point in points if _plain(point.get('narration'))]
     if config['hook'] == 'first-key-point' and points:
         hook = dict(points.pop(0), kind='hook', heading={'zh': '关键数据', 'ja': '要点', 'en': 'Key fact'}[lang])
         candidates = [hook, *points, *outro]

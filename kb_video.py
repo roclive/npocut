@@ -301,7 +301,8 @@ def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int,
     else:
         with Image.open(artwork) as source:
             visual = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
-        visual = Image.blend(visual, Image.new('RGB', size, '#081321'), .32)
+        veil = (script.get('template') or {}).get('colors', {}).get('veil', '#081321')
+        visual = Image.blend(visual, Image.new('RGB', size, veil), .32)
     visual.save(background)
     # Reuse the proven typography, then make its plain background transparent.
     flat = overlay.with_name(overlay.stem + '-flat.png')

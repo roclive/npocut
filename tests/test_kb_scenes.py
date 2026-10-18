@@ -177,3 +177,17 @@ def test_long_first_fact_is_split_instead_of_dropped(item):
     assert '这是来自源内容' in script['segments'][0]['narration']
     assert script['segments'][-1]['kind'] == 'outro'
     assert all(len(segment['narration']) > 0 for segment in script['segments'])
+
+
+@pytest.mark.parametrize('key_points,opening_kind,opening_text', [
+    (['', '有效事实'], 'hook', '有效事实'),
+    ([''], 'title', '标题'),
+])
+def test_vertical_short_ignores_blank_points_when_selecting_hook(
+        item, key_points, opening_kind, opening_text):
+    changed = dict(item, title='标题', summary='摘要', key_points=key_points)
+    script = build_template_script(changed, 'vertical-short')
+    opening = script['segments'][0]
+    assert opening['kind'] == opening_kind
+    assert opening['narration'] == opening_text
+    assert all(segment['narration'] for segment in script['segments'])

@@ -321,6 +321,26 @@ def test_scene_images_motion_and_low_performance(tmp_path, motion, expected):
         assert_chapter_progress_visible(final, (64, 36), tmp_path)
 
 
+def test_visual_layer_uses_template_veil_color(tmp_path):
+    from PIL import Image
+    size = (64, 36)
+    artwork = tmp_path / 'artwork.png'
+    background = tmp_path / 'background.png'
+    overlay = tmp_path / 'overlay.png'
+    Image.new('RGB', size, '#ff0000').save(artwork)
+    script = {
+        'title': 'Veil',
+        'template': {'colors': {'veil': '#0000ff'}},
+        'segments': [{'kind': 'title', 'heading': 'Veil', 'narration': 'Veil'}],
+    }
+
+    video.draw_visual_layers(script, script['segments'][0], 0, size, artwork,
+                             background, overlay)
+
+    with Image.open(background) as rendered:
+        assert rendered.convert('RGB').getpixel((0, 0)) == (173, 0, 81)
+
+
 def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_size):
     script = {'id': 'visual', 'segments': [{'narration': 'Hello.'}]}
     manifest = tmp_path / 'scene-manifest.json'
