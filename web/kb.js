@@ -1,4 +1,4 @@
-import { createMonitorRegistry, IMAGE_CONFIG_GUIDANCE, mergeOutputs } from './kb_state.js';
+import { createMonitorRegistry, hasRecoveredResult, IMAGE_CONFIG_GUIDANCE, mergeOutputs } from './kb_state.js';
 
 const panel = document.getElementById('kbPanel');
 const list = document.getElementById('kbLibrary');
@@ -152,7 +152,7 @@ function renderLibrary(library) {
         log.hidden = false;
         log.textContent = '';
         status.textContent = '正在启动…';
-        
+
         try {
           const job = await api('/api/kb/generate', {
             id: item.id,
@@ -182,7 +182,12 @@ function renderLibrary(library) {
     const previous = storage.get(`npocut-kb-${item.id}`);
     if (previous) {
       startMonitor(previous, item, { status, log, actions, preview }).catch(error => {
-        status.textContent = error.message;
+        if (hasRecoveredResult(error, item.autogen)) {
+          status.textContent = ['已生成', narrationInfo(item.autogen)].filter(Boolean).join(' · ');
+          log.hidden = true;
+        } else {
+          status.textContent = error.message;
+        }
         if (storage.get(`npocut-kb-${item.id}`) === previous) storage.remove(`npocut-kb-${item.id}`);
       });
     }
@@ -214,7 +219,7 @@ async function monitor(id, getView, isCancelled, itemKey) {
       ({ status, log, actions } = view);
       actions.querySelectorAll('button').forEach(b => { b.disabled = true; });
       log.hidden = false;
-      
+
       const phase = {
         narration: '🎙️ 生成旁白',
         images: '🖼️ 生成画面',

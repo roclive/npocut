@@ -2,6 +2,12 @@ export function mergeOutputs(...groups) {
   return [...new Set(groups.flat().filter(path => typeof path === 'string' && path))];
 }
 
+export function hasRecoveredResult(error, autogen) {
+  return error?.message === 'Unknown job' &&
+    autogen?.status === 'done' &&
+    mergeOutputs(autogen.outputs || []).length > 0;
+}
+
 export function createMonitorRegistry(run) {
   const active = new Map();
 

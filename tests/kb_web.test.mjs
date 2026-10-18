@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { safeKbFile, createJobs } from '../kb_web.js';
-import { createMonitorRegistry, IMAGE_CONFIG_GUIDANCE, mergeOutputs } from '../web/kb_state.js';
+import { createMonitorRegistry, hasRecoveredResult, IMAGE_CONFIG_GUIDANCE, mergeOutputs } from '../web/kb_state.js';
 
 test('completed aspect outputs are merged for simultaneous preview and download', async () => {
   assert.deepEqual(
@@ -15,6 +15,24 @@ test('completed aspect outputs are merged for simultaneous preview and download'
   );
   const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
   assert.match(source, /mergeOutputs\(outputsByItem\.get\(itemKey\)[\s\S]*job\.outputs/);
+});
+
+test('a stale job cannot overwrite a completed result recovered after restart', async () => {
+  const completed = { status: 'done', outputs: ['article-landscape.mp4'] };
+  assert.equal(hasRecoveredResult(new Error('Unknown job'), completed), true);
+  assert.equal(hasRecoveredResult(new Error('offline'), completed), false);
+  assert.equal(hasRecoveredResult(new Error('Unknown job'), { status: 'running', outputs: completed.outputs }), false);
+  assert.equal(hasRecoveredResult(new Error('Unknown job'), { status: 'done', outputs: [] }), false);
+
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /if \(hasRecoveredResult\(error, item\.autogen\)\)/);
+  assert.match(source, /status\.textContent = \['已生成', narrationInfo\(item\.autogen\)\]/);
+  assert.match(source, /log\.hidden = true/);
+});
+
+test('frontend source contains no trailing whitespace', async () => {
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /[ \t]+$/m);
 });
 
 test('rerender reuses a monitor and a replacement job cancels the stale monitor', async () => {
