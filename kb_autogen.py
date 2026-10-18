@@ -224,7 +224,9 @@ def main(argv=None) -> int:
         image_config = kb_images.Config.from_env()
         options = dict(state_version=STATE_VERSION, layout_version=3, scene_schema=1,
                        image=dict(provider=image_config.provider, model=image_config.model,
-                                  style=kb_scenes.STYLE, size=[512, 512]),
+                                  style=kb_scenes.STYLE,
+                                  negative_prompt=kb_scenes.NEGATIVE,
+                                  size=[512, 512]),
                        tts=args.tts, formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
                        max_points=args.max_points, burn=not args.no_burn,
                        font=kb_video.font_path(), fake_tts=os.environ.get('NPOCUT_FAKE_TTS') == '1')

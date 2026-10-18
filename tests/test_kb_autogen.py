@@ -321,6 +321,32 @@ def test_image_config_change_invalidates(setup, stub_render, monkeypatch):
     assert len(stub_render) == 2
 
 
+def test_negative_prompt_change_invalidates(setup, stub_render, monkeypatch):
+    _, out, args = setup
+    assert autogen.main(args) == 0
+    first = state(out)['a']
+    assert first['config']['image']['negative_prompt'] == autogen.kb_scenes.NEGATIVE
+    assert autogen.main(args) == 0
+    assert len(stub_render) == 1
+
+    monkeypatch.setattr(autogen.kb_scenes, 'NEGATIVE', 'changed negative prompt')
+    assert autogen.main(args) == 0
+    changed = state(out)['a']
+    assert changed['hash'] != first['hash']
+    assert changed['config']['image']['negative_prompt'] == 'changed negative prompt'
+    assert len(stub_render) == 2
+
+
+def test_lock_documentation_matches_process_lifetime_flock():
+    root = Path(autogen.__file__).parent
+    english = (root / 'README.md').read_text(encoding='utf-8')
+    chinese = (root / 'README_zh.md').read_text(encoding='utf-8')
+    assert 'held for the process lifetime using `flock`' in english
+    assert 'expires after two hours' not in english
+    assert '由 `flock` 在进程生命周期内持有' in chinese
+    assert '两小时后过期' not in chinese
+
+
 @pytest.fixture
 def stub_render(monkeypatch):
     calls = []
