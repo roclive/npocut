@@ -413,6 +413,7 @@ python3 kb_source.py script <id> --from-json kb_out/reading.json -o kb_out/scrip
 ```bash
 python3 kb_video.py ITEM_ID --from-json tests/fixtures/ontokb_reading.json
 python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang ja
+python3 kb_video.py ITEM_ID --from-json kb_out/reading.json --scenes kb_out/scenes/scene-manifest.json
 ```
 
 将摘要和要点制作成配音幻灯片，默认烧录字幕。结果保存在 `kb_out/<slug>/landscape/` 或 `kb_out/<slug>/vertical/`（指定 `--size` 时为 `kb_out/<slug>/WxH/`）：
@@ -423,6 +424,12 @@ python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang j
 可离线使用，也可通过 `--base-url` 连接 OntoKB。语言参数选择声音和标签，不翻译正文。
 配音使用 macOS `say`，直接输出 24 kHz 单声道 PCM WAV（`--file-format=WAVE --data-format=LEI16@24000`）；测试可设 `NPOCUT_FAKE_TTS=1` 生成静音。
 工具和字体可通过 `NPOCUT_FFMPEG`、`NPOCUT_FFPROBE`、`NPOCUT_FONT` 覆盖。
+
+`--scenes` 可直接读取 `kb_scenes.py` 输出的分镜清单：每张可用图片采用幅度不超过
+4% 的 Ken Burns 平移缩放和短淡变，文字及章节进度保持固定，底部 18% 留给字幕。
+单张缺图会回退到原深色背景；`--low-performance` 保留分镜构图但关闭动效；不传
+`--scenes` 时完全沿用旧渲染模式。最终 manifest 会记录模式、缺图数量、动效上限
+和字幕安全区。
 
 ### 自动生成新增或变更的 KB 条目
 

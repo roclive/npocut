@@ -265,3 +265,50 @@ def test_auto_whole_video_fallback(monkeypatch, tmp_path, caplog):
     assert 'offline' in manifest['fallback_reason']
     assert len(calls) == 4 and len(say_calls) == 2
     assert len(caplog.records) == 1
+
+
+@pytest.mark.parametrize('motion,expected', [(True, 'ken-burns'), (False, 'static')])
+def test_scene_images_motion_and_low_performance(tmp_path, motion, expected):
+    from PIL import Image
+    script = {'id': 'visual', 'title': 'Visual story', 'segments': [
+        {'kind': 'title', 'heading': 'Opening', 'narration': 'Hello.'},
+        {'kind': 'outro', 'heading': 'Source', 'narration': 'Bye.'},
+    ]}
+    images = []
+    for index, color in enumerate(('#b34c35', '#286f82')):
+        path = tmp_path / f'art-{index}.png'
+        Image.new('RGB', (96, 96), color).save(path)
+        images.append(path)
+    scene_manifest = tmp_path / 'scene-manifest.json'
+    scene_manifest.write_text(json.dumps({'source_id': 'visual', 'scenes': [
+        {'narration': {'segment_index': i, 'text': segment['narration']},
+         'image': {'path': str(images[i])}}
+        for i, segment in enumerate(script['segments'])]}), encoding='utf-8')
+    final = video.render_script(script, out=tmp_path / 'out', size=(64, 36), burn=False,
+                                scene_manifest=scene_manifest, motion=motion)
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    assert manifest['visuals']['mode'] == expected
+    assert manifest['visuals']['scene_count'] == 2
+    assert manifest['visuals']['subtitle_safe_area']['bottom_fraction'] == .18
+    data = probe_json(final)
+    assert any(s['codec_type'] == 'audio' for s in data['streams'])
+    video.ffmpeg('-i', final, '-f', 'null', '-')
+
+
+def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_size):
+    script = {'id': 'visual', 'segments': [{'narration': 'Hello.'}]}
+    manifest = tmp_path / 'scene-manifest.json'
+    manifest.write_text(json.dumps({'source_id': 'visual', 'scenes': [
+        {'narration': {'segment_index': 0, 'text': 'Hello.'},
+         'image': {'path': 'missing.png'}}]}), encoding='utf-8')
+    final = video.render_script(script, out=tmp_path / 'out', size=tiny_size, burn=False,
+                                scene_manifest=manifest)
+    data = json.loads((final.parent / 'manifest.json').read_text())
+    assert data['visuals']['mode'] == 'static'
+    assert data['visuals']['missing_scene_count'] == 1
+    broken = json.loads(manifest.read_text())
+    broken['scenes'][0]['narration']['text'] = 'Different.'
+    manifest.write_text(json.dumps(broken), encoding='utf-8')
+    with pytest.raises(ValueError, match='order'):
+        video.render_script(script, out=tmp_path / 'bad', size=tiny_size,
+                            scene_manifest=manifest)

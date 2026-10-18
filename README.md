@@ -1201,6 +1201,7 @@ Render an article's summary and key points as narrated slides with burned subtit
 ```bash
 python3 kb_video.py ITEM_ID --from-json tests/fixtures/ontokb_reading.json
 python3 kb_video.py ITEM_ID --script kb_out/item.script.json --vertical --lang ja
+python3 kb_video.py ITEM_ID --from-json kb_out/reading.json --scenes kb_out/scenes/scene-manifest.json
 ```
 
 Outputs in `kb_out/<slug>/landscape/` or `kb_out/<slug>/vertical/` (`--size`: `kb_out/<slug>/WxH/`): `video.mp4`, `<slug>.subbed.mp4`, `subs.srt`, and
@@ -1213,6 +1214,13 @@ Language selects voice/labels, not translation. macOS `say` supplies offline TTS
 as 24 kHz mono PCM WAV (`--file-format=WAVE --data-format=LEI16@24000`);
 `NPOCUT_FAKE_TTS=1` generates silence for testing. Override tools/fonts with
 `NPOCUT_FFMPEG`, `NPOCUT_FFPROBE`, and `NPOCUT_FONT`.
+
+`--scenes` accepts the output of `kb_scenes.py`: each available scene image gets
+a restrained 4% Ken Burns move, short fades, fixed text, chapter progress, and a
+subtitle-safe lower area. Missing images fall back per scene to the original dark
+background. `--low-performance` keeps the scene composition but disables motion;
+omitting `--scenes` preserves the legacy renderer. The manifest records the mode,
+scene fallback count, motion limits, and safe area.
 
 ### Autonomous KB generation
 

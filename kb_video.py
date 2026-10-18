@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import tempfile
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from common import FFMPEG, Cue, concat_file_line, probe_duration, write_srt
 from kb_source import DEFAULT_BASE_URL, build_script, fetch_library, load_library, slugify
@@ -201,9 +201,16 @@ def fit_text(text: str, width: int, height: int, initial: int):
     raise ValueError('Slide text cannot fit; shorten the script or increase --size')
 
 
-def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path) -> None:
+def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path,
+               artwork: Path | None = None) -> None:
     width, height = size
-    image = Image.new('RGB', size, '#101e31')
+    if artwork is None:
+        image = Image.new('RGB', size, '#101e31')
+    else:
+        with Image.open(artwork) as source:
+            image = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
+        # A restrained veil keeps headings readable without hiding the illustration.
+        image = Image.blend(image, Image.new('RGB', size, '#081321'), .48)
     draw = ImageDraw.Draw(image)
     margin = max(8, int(width * .075))
     usable = width - margin * 2
@@ -246,7 +253,68 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
     image.save(target)
 
 
-def assemble(slides: list[Path], audio: list[Path], durations: list[float], tmp: Path) -> Path:
+def load_scene_images(scene_manifest: str | Path, script: dict) -> list[Path | None]:
+    """Validate a kb_scenes manifest and resolve usable images.
+
+    A missing/blocked image degrades independently to the normal background. Relative
+    paths are resolved beside the manifest so bundles remain movable.
+    """
+    path = Path(scene_manifest).resolve()
+    data = json.loads(path.read_text(encoding='utf-8'))
+    scenes = data.get('scenes')
+    if not isinstance(scenes, list) or len(scenes) != len(script['segments']):
+        raise ValueError('Scene manifest must contain one scene per script segment')
+    if data.get('source_id') and str(data['source_id']) != str(script.get('id', '')):
+        raise ValueError('Scene manifest source_id does not match VideoScript')
+    resolved = []
+    for index, scene in enumerate(scenes):
+        narration = scene.get('narration', {}) if isinstance(scene, dict) else {}
+        if (not isinstance(scene, dict) or narration.get('segment_index', index) != index
+                or narration.get('text', script['segments'][index]['narration'])
+                != script['segments'][index]['narration']):
+            raise ValueError('Scene manifest segment order does not match VideoScript')
+        value = scene.get('image', {}).get('path')
+        image = Path(value).expanduser() if value else None
+        if image is not None and not image.is_absolute():
+            image = path.parent / image
+        resolved.append(image.resolve() if image is not None and image.is_file() else None)
+    return resolved
+
+
+def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int, int],
+                       artwork: Path, background: Path, overlay: Path) -> None:
+    """Make a movable image layer and a fixed text/progress layer."""
+    with Image.open(artwork) as source:
+        visual = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
+    visual = Image.blend(visual, Image.new('RGB', size, '#081321'), .32)
+    visual.save(background)
+    # Reuse the proven typography, then make its plain background transparent.
+    flat = overlay.with_name(overlay.stem + '-flat.png')
+    draw_slide(script, segment, index, size, flat)
+    with Image.open(flat) as source:
+        rgba = source.convert('RGBA')
+    # Preserve the teal chapter bar and all text, remove the dark canvas. Pillow's
+    # lookup table keeps this cheap even for 1080p/vertical production frames.
+    alpha = rgba.convert('L').point(lambda value: 0 if value < 45 else
+                                    min(255, (value - 35) * 12))
+    rgba.putalpha(alpha)
+    draw = ImageDraw.Draw(rgba)
+    width, height = size
+    margin = max(8, int(width * .075))
+    progress = (index + 1) / len(script['segments'])
+    # Keep the lower 18% clear for libass subtitles.
+    y = int(height * .79)
+    draw.rounded_rectangle((margin, y, width-margin, y + max(2, int(height*.008))),
+                           radius=2, fill=(255, 255, 255, 55))
+    draw.rounded_rectangle((margin, y, margin + int((width-2*margin)*progress),
+                            y + max(2, int(height*.008))), radius=2, fill=(83, 215, 189, 220))
+    rgba.save(overlay)
+    flat.unlink()
+
+
+def assemble(slides: list[Path], audio: list[Path], durations: list[float], tmp: Path,
+             visual_layers: list[tuple[Path, Path] | None] | None = None,
+             motion: bool = True) -> Path:
     """Encode frame-aligned stills and concatenate PCM audio before final AAC encoding."""
     video_list = tmp / 'video.txt'
     audio_list = tmp / 'audio.txt'
@@ -259,9 +327,27 @@ def assemble(slides: list[Path], audio: list[Path], durations: list[float], tmp:
         frames = round(elapsed * 30) - frames_so_far
         frames_so_far += frames
         clip = tmp / f'clip-{i}.mp4'
-        ffmpeg('-loop', 1, '-framerate', 30, '-i', slide, '-t', frames/30,
-               '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage',
-               '-pix_fmt', 'yuv420p', '-r', 30, clip)
+        seconds = frames / 30
+        layers = visual_layers[i] if visual_layers else None
+        if layers and motion:
+            background, overlay = layers
+            fade = min(.25, seconds / 5)
+            direction = (f'on/{max(1, frames-1)}' if i % 2 == 0
+                         else f'1-on/{max(1, frames-1)}')
+            # Four percent is enough to feel alive while avoiding seasick motion.
+            vf = (f"[0:v]zoompan=z='1+0.04*on/{max(1, frames-1)}':"
+                  f"x='(iw-iw/zoom)*({direction})':y='(ih-ih/zoom)/2':"
+                  f"d={frames}:s={slide_image_size(slide)}:fps=30,"
+                  f"fade=t=in:st=0:d={fade},fade=t=out:st={max(0, seconds-fade)}:d={fade}[bg];"
+                  "[1:v]format=rgba[fg];[bg][fg]overlay=0:0:shortest=1,format=yuv420p")
+            ffmpeg('-loop', 1, '-framerate', 30, '-i', background,
+                   '-loop', 1, '-framerate', 30, '-i', overlay, '-t', seconds,
+                   '-filter_complex', vf, '-an', '-c:v', 'libx264', '-preset', 'ultrafast',
+                   '-pix_fmt', 'yuv420p', '-r', 30, clip)
+        else:
+            ffmpeg('-loop', 1, '-framerate', 30, '-i', slide, '-t', seconds,
+                   '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage',
+                   '-pix_fmt', 'yuv420p', '-r', 30, clip)
         clips.append(clip)
     video_list.write_text(''.join(concat_file_line(p) for p in clips))
     audio_list.write_text(''.join(concat_file_line(p) for p in audio))
@@ -271,6 +357,11 @@ def assemble(slides: list[Path], audio: list[Path], durations: list[float], tmp:
            '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac',
            '-movflags', '+faststart', output)
     return output
+
+
+def slide_image_size(path: Path) -> str:
+    with Image.open(path) as image:
+        return f'{image.width}x{image.height}'
 
 
 def subtitle_font_size(size: tuple[int, int]) -> int:
@@ -328,9 +419,11 @@ def burn_subtitles(video: Path, target: Path, size: tuple[int, int], tmp: Path) 
 
 
 def write_manifest(script: dict, durations: list[float], voice: str,
-                   files: dict, final: Path, target: Path, tts_backend="say", fallback_reason=None) -> None:
+                   files: dict, final: Path, target: Path, tts_backend="say", fallback_reason=None,
+                   visuals: dict | None = None) -> None:
     manifest = dict(script=script, durations=durations, voice=voice, files=files,
                     tts_backend=tts_backend, fallback_reason=fallback_reason,
+                    visuals=visuals or {'mode': 'legacy', 'scene_count': 0},
                     total_duration=probe_duration(final),
                     created_at=datetime.now(timezone.utc).isoformat())
     target.write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
@@ -338,7 +431,8 @@ def write_manifest(script: dict, durations: list[float], voice: str,
 
 def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080),
                   voice: str | None = None, lang: str | None = None, burn: bool = True,
-                  custom_size: bool = False, output_slug: str | None = None, tts: str = "auto") -> Path:
+                  custom_size: bool = False, output_slug: str | None = None, tts: str = "auto",
+                  scene_manifest: str | Path | None = None, motion: bool = True) -> Path:
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
     if any(not isinstance(s, dict) or not isinstance(s.get('narration'), str) for s in script['segments']):
@@ -360,9 +454,10 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
     if custom_size:
         format_name = f'{size[0]}x{size[1]}'
     destination = out.resolve() / slug / format_name
+    scene_images = load_scene_images(scene_manifest, script) if scene_manifest else None
     with tempfile.TemporaryDirectory(prefix='npocut-kb-') as directory:
         tmp = Path(directory)
-        audio, slides, durations, boundaries = [], [], [], []
+        audio, slides, durations, boundaries, visual_layers = [], [], [], [], []
         def synthesize_all():
             durations.clear()
             boundaries.clear()
@@ -383,16 +478,32 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             synthesize_all()
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
-            draw_slide(script, segment, i, size, slide)
+            artwork = scene_images[i] if scene_images else None
+            draw_slide(script, segment, i, size, slide, artwork)
+            if artwork:
+                background, overlay = tmp / f'visual-{i}.png', tmp / f'overlay-{i}.png'
+                draw_visual_layers(script, segment, i, size, artwork, background, overlay)
+                visual_layers.append((background, overlay))
+            else:
+                visual_layers.append(None)
             audio.append(wav)
             slides.append(slide)
-        video = assemble(slides, audio, durations, tmp)
+        video = assemble(slides, audio, durations, tmp, visual_layers, motion)
         make_subtitles(script, durations, tmp / 'subs.srt', size, boundaries)
         final = tmp / f'{slug}.subbed.mp4' if burn else video
         if burn:
             burn_subtitles(video, final, size, tmp)
         files = {'video': 'video.mp4', 'subtitles': 'subs.srt', 'final': final.name}
-        write_manifest(script, durations, voice, files, final, tmp / 'manifest.json', backend, fallback_reason)
+        available = sum(layer is not None for layer in visual_layers)
+        visuals = {'mode': ('legacy' if scene_images is None else
+                            'ken-burns' if motion and available else 'static'),
+                   'scene_count': available, 'missing_scene_count': len(visual_layers) - available,
+                   'motion_scale': .04 if motion and available else 0,
+                   'fade_seconds_max': .25 if motion and available else 0,
+                   'subtitle_safe_area': {'bottom_fraction': .18},
+                   'scene_manifest': str(Path(scene_manifest).resolve()) if scene_manifest else None}
+        write_manifest(script, durations, voice, files, final, tmp / 'manifest.json', backend,
+                       fallback_reason, visuals)
         destination.mkdir(parents=True, exist_ok=True)
         for name in set(files.values()) | {'manifest.json'}:
             shutil.copy2(tmp / name, destination / name)
@@ -414,6 +525,9 @@ def main(argv=None) -> int:
     parser.add_argument('--max-points', type=int, default=6)
     parser.add_argument('--out', type=Path, default=Path('kb_out'))
     parser.add_argument('--no-burn', action='store_true')
+    parser.add_argument('--scenes', type=Path, help='kb_scenes scene-manifest.json')
+    parser.add_argument('--low-performance', action='store_true',
+                        help='use scene images without Ken Burns motion or fades')
     args = parser.parse_args(argv)
     try:
         size = tuple(map(int, args.size.lower().split('x'))) if args.size else (1920, 1080)
@@ -431,7 +545,9 @@ def main(argv=None) -> int:
             script = build_script(item, args.max_points, args.lang or 'zh')
             script['categories'] = item.get('categories', [])
         print(render_script(script, out=args.out, size=size, voice=args.voice,
-                            lang=args.lang, tts=args.tts, burn=not args.no_burn, custom_size=bool(args.size)))
+                            lang=args.lang, tts=args.tts, burn=not args.no_burn,
+                            custom_size=bool(args.size), scene_manifest=args.scenes,
+                            motion=not args.low_performance))
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'kb_video: {exc}\n')
     return 0
