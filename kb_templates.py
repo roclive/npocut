@@ -56,13 +56,16 @@ def build_template_script(item: dict, name: str, lang: str = 'zh') -> dict:
     # Keep each fact once. Sparse sources produce a shorter video; no filler is made.
     segments, seen, seconds = [], set(), 0.0
     outro_segment = candidates[-1] if candidates and candidates[-1].get('kind') == 'outro' else None
-    reserve = _estimated_seconds(outro_segment['narration']) if outro_segment else 0
+    minimum, maximum = config['shot_seconds']
+    reserve = max(minimum, _estimated_seconds(outro_segment['narration'])) if outro_segment else 0
     for segment in candidates:
         is_outro = segment.get('kind') == 'outro'
-        pieces = split_segment(segment, config['shot_seconds'][1])
+        pieces = split_segment(segment, maximum)
         for piece in pieces:
             key = _plain(piece.get('narration'))
-            estimate = _estimated_seconds(key)
+            # A concise source-backed shot is held on screen for the preset's
+            # minimum duration; it is never padded with invented narration.
+            estimate = max(minimum, _estimated_seconds(key))
             if not key or key in seen:
                 continue
             if not is_outro and seconds + estimate + reserve > config['max_duration']:
@@ -72,9 +75,9 @@ def build_template_script(item: dict, name: str, lang: str = 'zh') -> dict:
             seconds += estimate
     # A long hook is still preferable to fabricated filler; always retain it and the source page.
     if not segments and candidates:
-        segments.extend(split_segment(candidates[0], config['shot_seconds'][1]))
+        segments.extend(split_segment(candidates[0], maximum))
     if outro_segment and outro_segment not in segments:
-        segments.extend(split_segment(outro_segment, config['shot_seconds'][1]))
+        segments.extend(split_segment(outro_segment, maximum))
     result = dict(base, segments=segments, template=config)
     return result
 

@@ -435,3 +435,40 @@ def test_measured_slow_tts_is_recut_to_template_limits(monkeypatch, tmp_path):
     assert max(manifest['durations']) <= 8.02
     assert manifest['script']['segments'][0]['kind'] == 'hook'
     assert manifest['script']['segments'][-1]['kind'] == 'outro'
+
+
+def test_template_scene_manifest_survives_measured_tts_recut(monkeypatch, tmp_path):
+    """Authored scene artwork follows shots split after speech is measured."""
+    from PIL import Image
+    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
+    original = video.speech_weight
+    monkeypatch.setattr(video, 'speech_weight', lambda text: original(text) * 3)
+    item = load_library(FIXTURE)[0]
+    script = build_template_script(item, 'vertical-short')
+    scenes = []
+    for index, segment in enumerate(script['segments']):
+        image = tmp_path / f'scene-{index}.png'
+        Image.new('RGB', (16, 16), (index * 20, 30, 40)).save(image)
+        scenes.append({'narration': {'segment_index': index, 'text': segment['narration']},
+                       'image': {'path': str(image)}})
+    scene_manifest = tmp_path / 'scene-manifest.json'
+    scene_manifest.write_text(json.dumps({'source_id': script['id'], 'scenes': scenes}),
+                              encoding='utf-8')
+
+    final = video.render_script(script, out=tmp_path / 'out', size=(64, 36), burn=False,
+                                scene_manifest=scene_manifest)
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    assert len(manifest['script']['segments']) > len(scenes)
+    assert manifest['visuals']['scene_count'] == len(manifest['script']['segments'])
+
+
+@pytest.mark.parametrize('template', ['concept-explainer', 'vertical-short'])
+def test_measured_template_shots_respect_minimum(monkeypatch, tmp_path, template):
+    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
+    item = load_library(FIXTURE)[0]
+    script = build_template_script(item, template)
+    final = video.render_script(script, out=tmp_path / template, size=(64, 36), burn=False)
+    manifest = json.loads((final.parent / 'manifest.json').read_text())
+    minimum, maximum = manifest['template']['shot_seconds']
+    assert all(minimum - .01 <= duration <= maximum + .02
+               for duration in manifest['durations'])

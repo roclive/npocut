@@ -483,6 +483,9 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
     with tempfile.TemporaryDirectory(prefix='npocut-kb-') as directory:
         tmp = Path(directory)
         audio, slides, durations, boundaries, visual_layers = [], [], [], [], []
+        # Validate against the authored script. If measured speech later re-cuts
+        # a shot, each child inherits its parent's artwork.
+        scene_images = load_scene_images(scene_manifest, script) if scene_manifest else None
         def synthesize_all():
             """Synthesize, then enforce template shot and total limits on measured audio."""
             while True:
@@ -505,6 +508,20 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                 if len(replacement) == 1:
                     break
                 script['segments'][oversized:oversized + 1] = replacement
+                if scene_images is not None:
+                    scene_images[oversized:oversized + 1] = [scene_images[oversized]] * len(replacement)
+
+            minimum = (template.get('shot_seconds') or [None, None])[0]
+            if minimum:
+                for index, duration in enumerate(durations):
+                    if duration + .001 >= minimum:
+                        continue
+                    padded = tmp / f'audio-padded-{index}.wav'
+                    ffmpeg('-i', tmp / f'audio-{index}.wav', '-af',
+                           f'apad=whole_dur={minimum}', '-t', minimum,
+                           '-ar', 24000, '-ac', 1, '-c:a', 'pcm_s16le', padded)
+                    padded.replace(tmp / f'audio-{index}.wav')
+                    durations[index] = probe_duration(tmp / f'audio-{index}.wav')
 
             limit = template.get('max_duration')
             if limit and sum(durations) > limit:
@@ -521,6 +538,8 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                 if outro is not None:
                     keep.append(outro)
                 script['segments'] = [script['segments'][i] for i in keep]
+                if scene_images is not None:
+                    scene_images[:] = [scene_images[i] for i in keep]
                 durations[:] = [durations[i] for i in keep]
                 boundaries[:] = [boundaries[i] for i in keep]
                 for new_index, old_index in enumerate(keep):
@@ -531,6 +550,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                     if new_index != old_index:
                         shutil.move(tmp / f'audio-kept-{new_index}.wav',
                                     tmp / f'audio-{new_index}.wav')
+
         try:
             synthesize_all()
         except Exception as exc:
@@ -541,7 +561,6 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             backend = 'say'
             voice = choose_voice(language)
             synthesize_all()
-        scene_images = load_scene_images(scene_manifest, script) if scene_manifest else None
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
             artwork = scene_images[i] if scene_images else None

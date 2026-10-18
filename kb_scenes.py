@@ -83,6 +83,9 @@ def build_scene_plan(item: dict, script: dict | None = None, *, durations=None,
         if len(prompt) + len(NEGATIVE) + 40 > 4000:
             raise ValueError('scene prompt exceeds image backend limit')
         seconds = float(durations[i]) if durations is not None else max(2.0, round(len(narration) / 5 + .35, 3))
+        shot_range = (configured or {}).get('shot_seconds') or [None, None]
+        if durations is None and shot_range[0] is not None:
+            seconds = max(float(shot_range[0]), seconds)
         seed = int(digest(dict(source=source, narration=narration))[:8], 16)
         scenes.append(dict(id=f'scene-{i+1:03d}', source=source,
                            narration=dict(segment_index=i, text=narration),

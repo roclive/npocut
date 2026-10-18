@@ -136,6 +136,8 @@ def test_three_finished_templates_are_distinct_source_backed_and_bounded(item):
         assert plan['total_duration'] <= plan['template']['max_duration']
         assert all(scene['duration'] <= plan['template']['shot_seconds'][1]
                    for scene in plan['scenes'])
+        assert all(scene['duration'] >= plan['template']['shot_seconds'][0]
+                   for scene in plan['scenes'])
         narration = [s['narration']['text'] for s in plan['scenes']]
         assert len(narration) == len(set(narration))
         assert plan['scenes'][-1]['source']['editorial']
