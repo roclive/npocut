@@ -345,6 +345,55 @@ def test_visual_layer_uses_template_veil_color(tmp_path):
         assert rendered.convert('RGB').getpixel((0, 0)) == (173, 0, 81)
 
 
+@pytest.mark.parametrize('style,background_color,accent_color', [
+    ('paper', (238, 233, 223), (184, 92, 56)),
+    ('contrast', (9, 9, 9), (244, 211, 94)),
+])
+def test_visual_layers_preserve_selected_style(tmp_path, style, background_color,
+                                               accent_color):
+    """Scene-manifest layers must not silently fall back to editorial colors."""
+    from PIL import Image
+    size = (128, 72)
+    background = tmp_path / f'{style}-background.png'
+    overlay = tmp_path / f'{style}-overlay.png'
+    script = {'title': 'Style', 'segments': [
+        {'kind': 'title', 'heading': 'Style', 'narration': 'Style'},
+    ]}
+
+    video.draw_visual_layers(script, script['segments'][0], 0, size, None,
+                             background, overlay, style)
+
+    with Image.open(background) as rendered:
+        assert rendered.convert('RGB').getpixel((0, 0)) == background_color
+    with Image.open(overlay) as rendered:
+        rgba = rendered.convert('RGBA')
+        assert rgba.getpixel((0, 0))[3] == 0
+        margin = max(8, int(size[0] * .075))
+        progress_y = int(size[1] * .79)
+        assert rgba.getpixel((margin + 4, progress_y + 1))[:3] == accent_color
+
+
+def test_render_forwards_style_to_scene_layers(monkeypatch, tmp_path, tiny_size):
+    script = {'id': 'styled-scene', 'segments': [{'narration': 'Styled.'}]}
+    manifest = tmp_path / 'scene-manifest.json'
+    manifest.write_text(json.dumps({'source_id': script['id'], 'scenes': [
+        {'narration': {'segment_index': 0, 'text': 'Styled.'},
+         'image': {'path': None}},
+    ]}), encoding='utf-8')
+    styles = []
+    real_draw_visual_layers = video.draw_visual_layers
+
+    def record_style(*args, **kwargs):
+        styles.append(args[7] if len(args) > 7 else kwargs.get('style', 'editorial'))
+        return real_draw_visual_layers(*args, **kwargs)
+
+    monkeypatch.setattr(video, 'draw_visual_layers', record_style)
+    video.render_script(script, out=tmp_path / 'out', size=tiny_size, burn=False,
+                        scene_manifest=manifest, motion=False, style='paper')
+
+    assert styles == ['paper']
+
+
 def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_size):
     script = {'id': 'visual', 'segments': [{'narration': 'Hello.'}]}
     manifest = tmp_path / 'scene-manifest.json'

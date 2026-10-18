@@ -19,7 +19,7 @@ import subprocess
 import sys
 import tempfile
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 from common import FFMPEG, Cue, concat_file_line, probe_duration, write_srt
 from kb_source import DEFAULT_BASE_URL, build_script, fetch_library, load_library, slugify
@@ -28,6 +28,11 @@ from kb_templates import build_template_script, split_segment, template_names
 PAD = 0.4
 SAY_DEFAULT_VOICE = 'Tingting'
 PHASE_PREFIX = 'NPOCUT_PHASE:'
+VISUAL_PALETTES = {
+    'editorial': ('#101e31', '#53d7bd', '#ffffff', '#d4e2ef', '#8fa7bf'),
+    'paper': ('#eee9df', '#b85c38', '#28231f', '#504941', '#746b62'),
+    'contrast': ('#090909', '#f4d35e', '#ffffff', '#e6e6e6', '#a8a8a8'),
+}
 
 
 def report_phase(phase: str) -> None:
@@ -213,14 +218,9 @@ def fit_text(text: str, width: int, height: int, initial: int):
 def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path,
                artwork: Path | None = None, style: str = 'editorial') -> None:
     width, height = size
-    palettes = {
-        'editorial': ('#101e31', '#53d7bd', '#ffffff', '#d4e2ef', '#8fa7bf'),
-        'paper': ('#eee9df', '#b85c38', '#28231f', '#504941', '#746b62'),
-        'contrast': ('#090909', '#f4d35e', '#ffffff', '#e6e6e6', '#a8a8a8'),
-    }
-    if style not in palettes:
+    if style not in VISUAL_PALETTES:
         raise ValueError('Unknown visual style')
-    background, accent, heading_color, body_color, footer_color = palettes[style]
+    background, accent, heading_color, body_color, footer_color = VISUAL_PALETTES[style]
     template = script.get('template') or {}
     colors = template.get('colors') or {}
     background_color = colors.get('background', background)
@@ -309,10 +309,16 @@ def load_scene_images(scene_manifest: str | Path, script: dict) -> list[Path | N
 
 
 def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int, int],
-                       artwork: Path | None, background: Path, overlay: Path) -> None:
+                       artwork: Path | None, background: Path, overlay: Path,
+                       style: str = 'editorial') -> None:
     """Make a movable image layer and a fixed text/progress layer."""
+    if style not in VISUAL_PALETTES:
+        raise ValueError('Unknown visual style')
+    palette_background, palette_accent, *_ = VISUAL_PALETTES[style]
+    colors = (script.get('template') or {}).get('colors', {})
+    canvas_color = colors.get('background', palette_background)
     if artwork is None:
-        visual = Image.new('RGB', size, (script.get('template') or {}).get('colors', {}).get('background', '#101e31'))
+        visual = Image.new('RGB', size, canvas_color)
     else:
         with Image.open(artwork) as source:
             visual = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
@@ -321,14 +327,14 @@ def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int,
     visual.save(background)
     # Reuse the proven typography, then make its plain background transparent.
     flat = overlay.with_name(overlay.stem + '-flat.png')
-    draw_slide(script, segment, index, size, flat)
+    draw_slide(script, segment, index, size, flat, style=style)
     with Image.open(flat) as source:
         rgba = source.convert('RGBA')
-    # Preserve the teal chapter bar and all text, remove the dark canvas. Pillow's
-    # lookup table keeps this cheap even for 1080p/vertical production frames.
-    alpha = rgba.convert('L').point(lambda value: 0 if value < 45 else
-                                    min(255, (value - 35) * 12))
-    rgba.putalpha(alpha)
+    # Remove the exact flat canvas rather than relying on luminance: the paper
+    # palette is deliberately bright and must not obscure scene artwork.
+    canvas = Image.new('RGB', size, canvas_color)
+    difference = ImageOps.grayscale(ImageChops.difference(rgba.convert('RGB'), canvas))
+    rgba.putalpha(difference.point(lambda value: 0 if value == 0 else 255))
     draw = ImageDraw.Draw(rgba)
     width, height = size
     margin = max(8, int(width * .075))
@@ -337,7 +343,7 @@ def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int,
     y = int(height * .79)
     draw.rounded_rectangle((margin, y, width-margin, y + max(2, int(height*.008))),
                            radius=2, fill=(255, 255, 255, 55))
-    accent = (script.get('template') or {}).get('colors', {}).get('accent', '#53d7bd')
+    accent = colors.get('accent', palette_accent)
     draw.rounded_rectangle((margin, y, margin + int((width-2*margin)*progress),
                             y + max(2, int(height*.008))), radius=2, fill=accent)
     rgba.save(overlay)
@@ -586,7 +592,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             draw_slide(script, segment, i, size, slide, artwork, style)
             if scene_images is not None:
                 background, overlay = tmp / f'visual-{i}.png', tmp / f'overlay-{i}.png'
-                draw_visual_layers(script, segment, i, size, artwork, background, overlay)
+                draw_visual_layers(script, segment, i, size, artwork, background, overlay, style)
                 visual_layers.append((background, overlay))
             else:
                 visual_layers.append(None)
