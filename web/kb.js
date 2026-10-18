@@ -1,3 +1,5 @@
+import { createMonitorRegistry, IMAGE_CONFIG_GUIDANCE, mergeOutputs } from './kb_state.js';
+
 const panel = document.getElementById('kbPanel');
 const list = document.getElementById('kbLibrary');
 const message = document.getElementById('kbMessage');
@@ -10,6 +12,7 @@ const styleSelect = document.getElementById('kbStyle');
 const stylePreview = document.getElementById('kbStylePreview');
 
 let source;
+const outputsByItem = new Map();
 const fileUrl = path => `/api/kb/file?path=${encodeURIComponent(path)}`;
 
 async function api(url, data) {
@@ -126,6 +129,8 @@ function renderLibrary(library) {
   );
 
   for (const item of filtered) {
+    const itemKey = String(item.id);
+    outputsByItem.set(itemKey, mergeOutputs(outputsByItem.get(itemKey) || [], item.autogen?.outputs || []));
     const row = element('article', undefined, 'kb-item');
     const title = element('h3', item.title || item.id);
     const badge = element('span', item.kind || 'article', 'kb-badge');
@@ -134,7 +139,7 @@ function renderLibrary(library) {
     const actions = element('div', undefined, 'kb-actions');
     const log = element('pre', '', 'task-log'); log.hidden = true;
     const preview = element('div', undefined, 'kb-preview');
-    showOutputs(preview, item.autogen?.outputs);
+    showOutputs(preview, outputsByItem.get(itemKey));
 
     const generateBtn = () => {
       const btn = element('button', '生成视频');
@@ -160,7 +165,7 @@ function renderLibrary(library) {
             voice: voiceSelect.value
           });
           storage.set(`npocut-kb-${item.id}`, job.id);
-          await monitor(job.id, item, status, log, actions, preview);
+          await startMonitor(job.id, item, { status, log, actions, preview });
         } catch (error) {
           status.textContent = `生成失败：${error.message}`;
         } finally {
@@ -176,23 +181,39 @@ function renderLibrary(library) {
 
     const previous = storage.get(`npocut-kb-${item.id}`);
     if (previous) {
-      monitor(previous, item, status, log, actions, preview).catch(error => {
+      startMonitor(previous, item, { status, log, actions, preview }).catch(error => {
         status.textContent = error.message;
-        storage.remove(`npocut-kb-${item.id}`);
+        if (storage.get(`npocut-kb-${item.id}`) === previous) storage.remove(`npocut-kb-${item.id}`);
       });
     }
   }
   message.textContent = filtered.length ? `${filtered.length} 条知识` : '没有找到匹配的知识。';
 }
 
-async function monitor(id, item, status, log, actions, preview) {
+const monitorRegistry = createMonitorRegistry(monitor);
+
+function startMonitor(id, item, view) {
+  view.actions.querySelectorAll('button').forEach(button => { button.disabled = true; });
+  view.log.hidden = false;
+  return monitorRegistry.start(String(item.id), id, view);
+}
+
+async function monitor(id, getView, isCancelled, itemKey) {
+  let view = getView();
+  let { status, log, actions } = view;
   const buttons = actions.querySelectorAll('button');
   buttons.forEach(b => { b.disabled = true; });
   log.hidden = false;
 
   try {
     for (;;) {
+      if (isCancelled()) return;
       const job = await api(`/api/kb/jobs/${encodeURIComponent(id)}`);
+      if (isCancelled()) return;
+      view = getView();
+      ({ status, log, actions } = view);
+      actions.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      log.hidden = false;
       
       const phase = {
         narration: '🎙️ 生成旁白',
@@ -205,19 +226,21 @@ async function monitor(id, item, status, log, actions, preview) {
 
       if (job.status !== 'running') {
         if (job.status === 'done') {
-          showOutputs(preview, job.outputs);
+          const outputs = mergeOutputs(outputsByItem.get(itemKey) || [], job.outputs || []);
+          outputsByItem.set(itemKey, outputs);
+          showOutputs(view.preview, outputs);
           status.textContent = ['已生成', narrationInfo(job)].filter(Boolean).join(' · ');
         } else if (job.status === 'failed') {
           const reason = (job.log || '').trim().split(/\r?\n/).filter(Boolean).at(-1) || '未知错误';
           status.textContent = `生成失败：${reason}。可点击“生成视频”重试。`;
         }
-        storage.remove(`npocut-kb-${item.id}`);
+        if (storage.get(`npocut-kb-${itemKey}`) === id) storage.remove(`npocut-kb-${itemKey}`);
         break;
       }
       await new Promise(resolve => setTimeout(resolve, 1200));
     }
   } finally {
-    buttons.forEach(b => { b.disabled = false; });
+    if (!isCancelled()) getView().actions.querySelectorAll('button').forEach(b => { b.disabled = false; });
   }
 }
 
@@ -240,7 +263,7 @@ searchInput.addEventListener('input', () => {
 });
 
 imageConfigBtn.onclick = () => {
-  alert('图片后端配置说明：\\n• 默认 KB_IMAGE_PROVIDER=gradient，可完全离线运行。\\n• AI 生图设为 KB_IMAGE_PROVIDER=openai，并在启动 npocut 的环境中提供 OPENAI_API_KEY。\\n• OpenAI 模式还需安装 requirements-images.txt（Pillow）。\\n• 密钥只由服务端读取，页面不会保存或显示密钥。\\n• “就绪”是本地 doctor 检查，不验证网络、账单或模型权限。');
+  alert(IMAGE_CONFIG_GUIDANCE);
 };
 
 async function checkImageBackend() {

@@ -6,6 +6,48 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { safeKbFile, createJobs } from '../kb_web.js';
+import { createMonitorRegistry, IMAGE_CONFIG_GUIDANCE, mergeOutputs } from '../web/kb_state.js';
+
+test('completed aspect outputs are merged for simultaneous preview and download', async () => {
+  assert.deepEqual(
+    mergeOutputs(['article-landscape.mp4'], ['article-vertical.mp4'], ['article-landscape.mp4']),
+    ['article-landscape.mp4', 'article-vertical.mp4'],
+  );
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /mergeOutputs\(outputsByItem\.get\(itemKey\)[\s\S]*job\.outputs/);
+});
+
+test('rerender reuses a monitor and a replacement job cancels the stale monitor', async () => {
+  const runs = [];
+  let releaseFirst;
+  const registry = createMonitorRegistry(async (id, getView, isCancelled) => {
+    runs.push({ id, getView, isCancelled });
+    if (id === 'first') await new Promise(resolve => { releaseFirst = resolve; });
+  });
+  const first = registry.start('article', 'first', 'old view');
+  await Promise.resolve();
+  const duplicate = registry.start('article', 'first', 'new view');
+  assert.equal(duplicate, first);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].getView(), 'new view');
+
+  const second = registry.start('article', 'second', 'latest view');
+  await Promise.resolve();
+  assert.equal(runs[0].isCancelled(), true);
+  assert.equal(runs.length, 2);
+  releaseFirst();
+  await Promise.all([first, second]);
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /monitorRegistry\.start\(String\(item\.id\), id, view\)/);
+  assert.match(source, /storage\.get\(`npocut-kb-\$\{itemKey\}`\) === id/);
+});
+
+test('image configuration guidance contains real line breaks', async () => {
+  assert.match(IMAGE_CONFIG_GUIDANCE, /说明：\n• 默认/);
+  assert.equal(IMAGE_CONFIG_GUIDANCE.includes('\\n'), false);
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /alert\(IMAGE_CONFIG_GUIDANCE\)/);
+});
 
 test('file guard blocks traversal, absolute paths and symlink escapes', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'kb-web-'));
@@ -49,7 +91,7 @@ test('frontend search stringifies non-text OntoKB fields and uses the structured
 });
 
 test('configuration guidance names the implemented OpenAI settings and never the removed SD URL', async () => {
-  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../web/kb_state.js', import.meta.url), 'utf8');
   assert.match(source, /KB_IMAGE_PROVIDER=openai/);
   assert.match(source, /OPENAI_API_KEY/);
   assert.match(source, /requirements-images\.txt/);
