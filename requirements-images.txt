@@ -1,0 +1,2 @@
+# Optional hosted-image decoding only; install in .venv-images.
+Pillow==12.1.0

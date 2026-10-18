@@ -467,3 +467,8 @@ Web 服务可用 `NPOCUT_PYTHON` 指定安装了 Pillow 的 Python 3.10+。
 `kb_video.py` 和 `kb_autogen.py` 支持 `--tts auto|edge|say`（默认 `auto`）及后端专用的 `--voice`。Edge 需要联网，默认中文声音为 `zh-CN-YunyangNeural`，日语为 `ja-JP-KeitaNeural`，英语为 `en-US-GuyNeural`。Edge 失败后重试两次；auto 模式随后将整片重新用 macOS say 离线合成，中文优先 Tingting，避免混用声音。Edge 的声音覆盖参数不会传给 say；离线指定声音请使用 `--tts say --voice Tingting`。
 
 音频及句子边界缓存在 `kb_out/.tts_cache/`。`manifest.json` 记录 `tts_backend`、`voice` 和 `fallback_reason`。Edge 字幕按句子边界计时，长句优先按分句标点平衡切分，避免孤立短尾。`NPOCUT_FAKE_TTS=1` 始终使用离线静音。改变后端或声音会使 autogen 重新生成视频。
+
+### 可选图片后端
+
+独立图片 provider、离线诊断、真实 API smoke 和渐变/文字排版回退见
+[图片后端说明](docs/kb-images.md)。默认离线；API 需要显式选择 `openai`。
