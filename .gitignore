@@ -41,3 +41,6 @@ temp/
 
 # OntoKB generated scripts and media
 kb_out/
+
+# Isolated optional image provider dependencies
+.venv-images/

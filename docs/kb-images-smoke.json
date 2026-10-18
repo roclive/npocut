@@ -1,0 +1,29 @@
+{
+  "provider": "openai",
+  "ai_generated": true,
+  "model": "gpt-image-2.5-flare",
+  "width": 512,
+  "height": 512,
+  "source_width": 1024,
+  "source_height": 1024,
+  "download_bytes": 2407059,
+  "model_download_bytes": 0,
+  "license": "Hosted proprietary model; OpenAI API service terms apply; no weights distributed",
+  "usage": {
+    "input_tokens": 20,
+    "input_tokens_details": {
+      "image_tokens": 0,
+      "text_tokens": 20
+    },
+    "output_tokens": 196,
+    "output_tokens_details": {
+      "image_tokens": 196,
+      "text_tokens": 0
+    },
+    "total_tokens": 216
+  },
+  "path": "kb_out/images/real-smoke.png",
+  "seconds": 12.191,
+  "sha256": "f71c074fd206979ab523cd5da4918661a002b6b31112dbb69122ff837c6621cd",
+  "bytes": 583677
+}
