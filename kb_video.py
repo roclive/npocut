@@ -275,9 +275,14 @@ def load_scene_images(scene_manifest: str | Path, script: dict) -> list[Path | N
             raise ValueError('Scene manifest segment order does not match VideoScript')
         value = scene.get('image', {}).get('path')
         image = Path(value).expanduser() if value else None
+        candidates = [image] if image is not None else []
         if image is not None and not image.is_absolute():
-            image = path.parent / image
-        resolved.append(image.resolve() if image is not None and image.is_file() else None)
+            # New/movable manifests store paths relative to the manifest. Older
+            # kb_scenes manifests produced from a relative --out value contain a
+            # cwd-relative path which already includes that output directory.
+            candidates = [path.parent / image, image]
+        usable = next((candidate for candidate in candidates if candidate.is_file()), None)
+        resolved.append(usable.resolve() if usable is not None else None)
     return resolved
 
 

@@ -312,3 +312,25 @@ def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_siz
     with pytest.raises(ValueError, match='order'):
         video.render_script(script, out=tmp_path / 'bad', size=tiny_size,
                             scene_manifest=manifest)
+
+
+def test_scene_manifest_accepts_legacy_cwd_relative_image_path(monkeypatch, tmp_path):
+    """Consume paths emitted when kb_scenes receives its default relative --out."""
+    from PIL import Image
+
+    monkeypatch.chdir(tmp_path)
+    output = Path('kb_out/scenes')
+    image = output / 'image-cache' / 'scene.png'
+    image.parent.mkdir(parents=True)
+    Image.new('RGB', (16, 16), '#286f82').save(image)
+    manifest = output / 'scene-manifest.json'
+    manifest.write_text(json.dumps({'source_id': 'visual', 'scenes': [
+        {'narration': {'segment_index': 0, 'text': 'Hello.'},
+         'image': {'path': str(image)}}
+    ]}), encoding='utf-8')
+
+    loaded = video.load_scene_images(manifest, {
+        'id': 'visual', 'segments': [{'narration': 'Hello.'}]
+    })
+
+    assert loaded == [image.resolve()]
