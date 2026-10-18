@@ -66,6 +66,25 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
     voiceCache.set(lang, { time: Date.now(), value });
     return value;
   }
+  async function imageDoctor() {
+    return new Promise((resolve, reject) => {
+      const child = spawn(python, [path.join(cliRoot, 'kb_images.py'), 'doctor'], { cwd: workDir, env });
+      let output = '';
+      const timer = setTimeout(() => { child.kill(); reject(new Error('Image backend check timed out')); }, 10000);
+      child.stdout.on('data', chunk => { output += chunk; });
+      child.once('error', error => { clearTimeout(timer); reject(error); });
+      child.once('close', code => {
+        clearTimeout(timer);
+        try {
+          if (code !== 0) throw new Error('Image backend check failed');
+          const result = JSON.parse(output);
+          resolve({ ready: !!result.ready, provider: result.provider, model: result.model,
+                    api_key_present: !!result.api_key_present, pillow_installed: !!result.pillow_installed,
+                    network_checked: false });
+        } catch (error) { reject(error); }
+      });
+    });
+  }
   const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
   async function body(req) {
     let text = '';
@@ -85,6 +104,8 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
       await cleanup;
       if (url.pathname === '/api/kb/voices' && req.method === 'GET') {
         json(res, 200, await voices(url.searchParams.get('lang') ?? 'zh'));
+      } else if (url.pathname === '/api/kb/image-status' && req.method === 'GET') {
+        json(res, 200, await imageDoctor());
       } else if (url.pathname === '/api/kb/file' && ['GET', 'HEAD'].includes(req.method)) {
         let file;
         try { file = await safeKbFile(out, url.searchParams.get('path')); } catch { json(res, 403, { error: 'Forbidden path' }); return true; }
@@ -121,6 +142,10 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
       } else if (url.pathname === '/api/kb/generate' && req.method === 'POST') {
         const data = await body(req);
         if (typeof data.id !== 'string' || !data.id || (data.vertical !== undefined && typeof data.vertical !== 'boolean') || (data.lang !== undefined && !['zh', 'ja', 'en'].includes(data.lang)) || (data.voice !== undefined && (typeof data.voice !== 'string' || data.voice.length > 200))) throw new Error('Invalid generation options');
+        const sizes = new Set(['1920x1080', '1280x720']);
+        const styles = new Set(['editorial', 'paper', 'contrast']);
+        if (data.size !== undefined && !sizes.has(data.size)) throw new Error('Invalid video size');
+        if (data.style !== undefined && !styles.has(data.style)) throw new Error('Invalid visual style');
         const tts = data.tts === undefined ? 'auto' : data.tts;
         if (!['auto', 'edge', 'say'].includes(tts)) throw new Error('Invalid TTS backend');
         if (data.id.startsWith('-')) throw new Error('Invalid item id');
@@ -135,6 +160,8 @@ export function createKbHandler({ workDir, cliRoot = workDir, python = process.e
         const voice = data.voice === undefined ? catalog.defaults[backend] : data.voice;
         if (!catalog[backend].some(item => item.name === voice)) throw new Error('Invalid voice for backend and language');
         args.push('--tts', tts, '--voice', voice);
+        if (data.size) args.push('--size', data.size);
+        if (data.style) args.push('--style', data.style);
         if (data.vertical) args.push('--vertical');
         if (data.lang) args.push('--lang', data.lang);
         const child = spawn(python, args, { cwd: workDir, env: { ...env, PYTHONUNBUFFERED: '1' } });

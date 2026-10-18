@@ -201,15 +201,24 @@ def fit_text(text: str, width: int, height: int, initial: int):
     raise ValueError('Slide text cannot fit; shorten the script or increase --size')
 
 
-def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path) -> None:
+def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path,
+               style: str = 'editorial') -> None:
     width, height = size
-    image = Image.new('RGB', size, '#101e31')
+    palettes = {
+        'editorial': ('#101e31', '#53d7bd', '#ffffff', '#d4e2ef', '#8fa7bf'),
+        'paper': ('#eee9df', '#b85c38', '#28231f', '#504941', '#746b62'),
+        'contrast': ('#090909', '#f4d35e', '#ffffff', '#e6e6e6', '#a8a8a8'),
+    }
+    if style not in palettes:
+        raise ValueError('Unknown visual style')
+    background, accent, heading_color, body_color, footer_color = palettes[style]
+    image = Image.new('RGB', size, background)
     draw = ImageDraw.Draw(image)
     margin = max(8, int(width * .075))
     usable = width - margin * 2
     short = min(size)
     draw.rounded_rectangle((margin, int(height * .09), width-margin, int(height * .105)),
-                           radius=2, fill='#53d7bd')
+                           radius=2, fill=accent)
     title = segment.get('kind') == 'title'
     heading = str(segment.get('heading', ''))
     body = str(segment.get('text', ''))
@@ -229,8 +238,8 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
     bf, bodies, bs = fit_text(body, usable, max(1, body_height), max(1, int(short * .055)))
     block_height = len(headings) * hs + gap + len(bodies) * bs
     y = top + (available - block_height) / 2
-    for lines, font, spacing, color in [(headings, hf, hs, '#ffffff'),
-                                        (bodies, bf, bs, '#d4e2ef')]:
+    for lines, font, spacing, color in [(headings, hf, hs, heading_color),
+                                        (bodies, bf, bs, body_color)]:
         for line in lines:
             draw.text((margin, y), line, font=font, fill=color)
             y += spacing
@@ -241,7 +250,7 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
                                     max(1, int(short*.020)))
     y = height * .76
     for line in lines:
-        draw.text((margin, y), line, font=font, fill='#8fa7bf')
+        draw.text((margin, y), line, font=font, fill=footer_color)
         y += spacing
     image.save(target)
 
@@ -338,7 +347,8 @@ def write_manifest(script: dict, durations: list[float], voice: str,
 
 def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080),
                   voice: str | None = None, lang: str | None = None, burn: bool = True,
-                  custom_size: bool = False, output_slug: str | None = None, tts: str = "auto") -> Path:
+                  custom_size: bool = False, output_slug: str | None = None, tts: str = "auto",
+                  style: str = 'editorial') -> Path:
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
     if any(not isinstance(s, dict) or not isinstance(s.get('narration'), str) for s in script['segments']):
@@ -383,7 +393,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             synthesize_all()
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
-            draw_slide(script, segment, i, size, slide)
+            draw_slide(script, segment, i, size, slide, style)
             audio.append(wav)
             slides.append(slide)
         video = assemble(slides, audio, durations, tmp)
@@ -408,6 +418,7 @@ def main(argv=None) -> int:
     parser.add_argument('--script', type=Path)
     parser.add_argument('--vertical', action='store_true')
     parser.add_argument('--size', help='Even WxH dimensions; vertical swaps landscape dimensions')
+    parser.add_argument('--style', choices=['editorial', 'paper', 'contrast'], default='editorial')
     parser.add_argument('--tts', choices=['auto', 'edge', 'say'], default='auto')
     parser.add_argument('--voice')
     parser.add_argument('--lang', choices=['zh', 'ja', 'en'])
@@ -431,7 +442,8 @@ def main(argv=None) -> int:
             script = build_script(item, args.max_points, args.lang or 'zh')
             script['categories'] = item.get('categories', [])
         print(render_script(script, out=args.out, size=size, voice=args.voice,
-                            lang=args.lang, tts=args.tts, burn=not args.no_burn, custom_size=bool(args.size)))
+                            lang=args.lang, tts=args.tts, burn=not args.no_burn,
+                            custom_size=bool(args.size), style=args.style))
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'kb_video: {exc}\n')
     return 0

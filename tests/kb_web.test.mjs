@@ -29,6 +29,37 @@ test('jobs handle success, nonzero exit, spawn error and bounded log', () => {
   const missing = child(), error = jobs.start(missing); missing.emit('error', new Error('ENOENT')); missing.emit('close', 0); assert.equal(error.status, 'failed');
 });
 
+test('configuration guidance names the implemented OpenAI settings and never the removed SD URL', async () => {
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /KB_IMAGE_PROVIDER=openai/);
+  assert.match(source, /OPENAI_API_KEY/);
+  assert.match(source, /requirements-images\.txt/);
+  assert.doesNotMatch(source, /ONTOKB_IMAGE_URL|Stable Diffusion/);
+});
+
+test('frontend uses the image doctor endpoint instead of a timed ready state', async () => {
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(source, /api\('\/api\/kb\/image-status'\)/);
+  assert.doesNotMatch(source, /setTimeout\(\(\) => \{\s*imageStatus\.textContent = '就绪'/);
+});
+
+test('style preview exposes every supported backend style', async () => {
+  const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  for (const style of ['editorial', 'paper', 'contrast']) assert.match(html, new RegExp(`value="${style}"`));
+  assert.match(html, /id="kbStylePreview"/);
+  assert.match(source, /style: styleSelect\.value/);
+});
+
+test('format controls include aspect and quality and submit both', async () => {
+  const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../web/kb.js', import.meta.url), 'utf8');
+  assert.match(html, /id="kbAspect"/); assert.match(html, /id="kbQuality"/);
+  assert.match(html, /value="1920x1080"/); assert.match(html, /value="1280x720"/);
+  assert.match(source, /vertical: aspectSelect\.value === 'vertical'/);
+  assert.match(source, /size: qualitySelect\.value/);
+});
+
 test('HTTP offline library, generation, preview ranges and traversal', async () => {
   const { createAppServer } = await import('../server.js');
   const dir = await mkdtemp(path.join(tmpdir(), 'kb-api-'));
@@ -40,9 +71,12 @@ p.write_text(p.read_text()+'x' if p.exists() else 'x')
 print(json.dumps({'edge':[{'name':'ja-JP-KeitaNeural','label':'Keita','gender':'Male'}], 'say':[{'name':'Kyoko','label':'Kyoko'}], 'defaults':{'edge':'ja-JP-KeitaNeural','say':'Kyoko'}}))
 `);
     await writeFile(path.join(dir, 'kb_video.py'), `import pathlib,sys\nout=pathlib.Path(sys.argv[sys.argv.index('--out')+1])\np=out/'result.mp4'\np.write_bytes(b'0123456789')\n(out/'args.json').write_text(__import__('json').dumps(sys.argv))\n(out/'manifest.json').write_text(__import__('json').dumps({'tts_backend':'say','voice':'Kyoko','fallback_reason':'offline'}))\nprint(p)\n`);
+    await writeFile(path.join(dir, 'kb_images.py'), `import json\nprint(json.dumps({'ready':False,'provider':'openai','model':'test-model','api_key_present':False,'pillow_installed':True,'network_checked':False}))\n`);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
     const post = (url, value) => fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+    const imageStatus = await (await fetch(base + '/api/kb/image-status')).json();
+    assert.deepEqual(imageStatus, { ready:false, provider:'openai', model:'test-model', api_key_present:false, pillow_installed:true, network_checked:false });
     const library = await (await post('/api/kb/library', { library: [{ id: 'article', title: '<script>', summary: 'hello', key_points: ['one'] }] })).json();
     assert.equal(library.library[0].key_points_count, 1);
     assert.match(library.source, /^web-source-[a-f0-9]{16}\.json$/);
@@ -65,7 +99,7 @@ print(json.dumps({'edge':[{'name':'ja-JP-KeitaNeural','label':'Keita','gender':'
       assert.equal(rejected.status, 400);
       assert.equal((await rejected.json()).error, 'Invalid snapshot');
     }
-    for (const invalid of [{tts:'invalid'}, {tts:null}, {tts:'auto',voice:'Tingting'}, {tts:'say',voice:'ja-JP-KeitaNeural'}, {voice:''}]) {
+    for (const invalid of [{tts:'invalid'}, {tts:null}, {tts:'auto',voice:'Tingting'}, {tts:'say',voice:'ja-JP-KeitaNeural'}, {voice:''}, {size:'4k'}, {style:'neon'}]) {
       assert.equal((await post('/api/kb/generate', {id:'article', lang:'ja', ...invalid})).status, 400);
     }
     assert.equal((await fetch(base + '/api/kb/voices?lang=bad')).status, 400);
@@ -73,7 +107,7 @@ print(json.dumps({'edge':[{'name':'ja-JP-KeitaNeural','label':'Keita','gender':'
     assert.equal(catalog.edge[0].name, 'ja-JP-KeitaNeural');
     await fetch(base + '/api/kb/voices?lang=ja');
     assert.equal(await readFile(path.join(dir, 'voice_calls.txt'), 'utf8'), 'x');
-    const started = await post('/api/kb/generate', { id: 'article', source: library.source, vertical: true, lang: 'ja' });
+    const started = await post('/api/kb/generate', { id: 'article', source: library.source, vertical: true, size: '1280x720', style: 'paper', lang: 'ja' });
     assert.equal(started.status, 202);
     const { id } = await started.json();
     let job;
@@ -89,6 +123,8 @@ print(json.dumps({'edge':[{'name':'ja-JP-KeitaNeural','label':'Keita','gender':'
     const args = JSON.parse(await readFile(path.join(dir, 'kb_out/args.json'), 'utf8'));
     assert.equal(args[args.indexOf('--tts') + 1], 'auto');
     assert.equal(args[args.indexOf('--voice') + 1], 'ja-JP-KeitaNeural');
+    assert.equal(args[args.indexOf('--size') + 1], '1280x720');
+    assert.equal(args[args.indexOf('--style') + 1], 'paper');
     for (const [tts, voice] of [['edge', 'ja-JP-KeitaNeural'], ['say', 'Kyoko']]) {
       const response = await post('/api/kb/generate', {id:'article', source:library.source, lang:'ja', tts, voice});
       assert.equal(response.status, 202);

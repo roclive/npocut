@@ -4,6 +4,10 @@ const message = document.getElementById('kbMessage');
 const searchInput = document.getElementById('kbSearch');
 const imageStatus = document.getElementById('imageBackendStatus');
 const imageConfigBtn = document.getElementById('imageConfigBtn');
+const aspectSelect = document.getElementById('kbAspect');
+const qualitySelect = document.getElementById('kbQuality');
+const styleSelect = document.getElementById('kbStyle');
+const stylePreview = document.getElementById('kbStylePreview');
 
 let source;
 const fileUrl = path => `/api/kb/file?path=${encodeURIComponent(path)}`;
@@ -132,8 +136,8 @@ function renderLibrary(library) {
     const preview = element('div', undefined, 'kb-preview');
     showOutputs(preview, item.autogen?.outputs);
 
-    const generateBtn = (vertical) => {
-      const btn = element('button', vertical ? '生成竖屏' : '生成横屏');
+    const generateBtn = () => {
+      const btn = element('button', '生成视频');
       btn.type = 'button';
       btn.onclick = async () => {
         if (voiceSelect.disabled || !voiceSelect.value) { status.textContent = '请先选择可用声音'; return; }
@@ -148,7 +152,9 @@ function renderLibrary(library) {
           const job = await api('/api/kb/generate', { 
             id: item.id, 
             source, 
-            vertical, 
+            vertical: aspectSelect.value === 'vertical',
+            size: qualitySelect.value,
+            style: styleSelect.value,
             lang: langSelect.value, 
             tts: ttsSelect.value, 
             voice: voiceSelect.value 
@@ -164,7 +170,7 @@ function renderLibrary(library) {
       return btn;
     };
 
-    actions.append(generateBtn(false), generateBtn(true));
+    actions.append(generateBtn());
     row.append(title, badge, summary, status, actions, log, preview); 
     list.append(row);
 
@@ -200,6 +206,9 @@ async function monitor(id, item, status, log, actions, preview) {
         if (job.status === 'done') { 
           showOutputs(preview, job.outputs); 
           status.textContent = ['已生成', narrationInfo(job)].filter(Boolean).join(' · '); 
+        } else if (job.status === 'failed') {
+          const reason = (job.log || '').trim().split(/\r?\n/).filter(Boolean).at(-1) || '未知错误';
+          status.textContent = `生成失败：${reason}。可点击“生成视频”重试。`;
         }
         storage.remove(`npocut-kb-${item.id}`); 
         break;
@@ -230,10 +239,23 @@ searchInput.addEventListener('input', () => {
 });
 
 imageConfigBtn.onclick = () => {
-  alert('图片后端配置说明：\\n1. 安装 Stable Diffusion WebUI 或相关 API 服务\\n2. 在 .env 文件中配置 ONTOKB_IMAGE_URL\\n3. 确保服务端口开放并可通过本机访问。');
+  alert('图片后端配置说明：\\n• 默认 KB_IMAGE_PROVIDER=gradient，可完全离线运行。\\n• AI 生图设为 KB_IMAGE_PROVIDER=openai，并在启动 npocut 的环境中提供 OPENAI_API_KEY。\\n• OpenAI 模式还需安装 requirements-images.txt（Pillow）。\\n• 密钥只由服务端读取，页面不会保存或显示密钥。\\n• “就绪”是本地 doctor 检查，不验证网络、账单或模型权限。');
 };
 
-setTimeout(() => {
-  imageStatus.textContent = '就绪';
-  imageStatus.className = 'status-badge online';
-}, 1000);
+async function checkImageBackend() {
+  imageStatus.textContent = '检测中…';
+  imageStatus.className = 'status-badge';
+  try {
+    const result = await api('/api/kb/image-status');
+    const label = result.provider === 'openai' ? `OpenAI${result.model ? ` · ${result.model}` : ''}` : '离线渐变';
+    imageStatus.textContent = result.ready ? `就绪 · ${label}` : `不可用 · ${label}`;
+    imageStatus.className = `status-badge ${result.ready ? 'online' : 'offline'}`;
+    imageStatus.title = result.network_checked ? '' : '仅检查本地配置，未验证网络、账单或模型权限';
+  } catch (error) {
+    imageStatus.textContent = `检测失败 · ${error.message}`;
+    imageStatus.className = 'status-badge offline';
+  }
+}
+
+styleSelect.addEventListener('change', () => { stylePreview.dataset.style = styleSelect.value; });
+checkImageBackend();

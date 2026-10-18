@@ -184,6 +184,10 @@
       {
         "from": "kb_voices.py",
         "to": "npocut-cli/kb_voices.py"
+      },
+      {
+        "from": "kb_images.py",
+        "to": "npocut-cli/kb_images.py"
       }
     ],
     "mac": {

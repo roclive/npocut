@@ -57,12 +57,19 @@
             <label>配音 <select id="kbTts"><option value="auto">自动（Edge，失败退回本机）</option><option value="edge">Edge 神经语音</option><option value="say">本机 macOS</option></select></label>
             <label>声音 <select id="kbVoice" aria-label="声音" disabled><option>正在加载…</option></select></label>
             <span id="kbVoiceMessage" role="status"></span>
+            <label>画幅 <select id="kbAspect"><option value="landscape">横屏 16:9</option><option value="vertical">竖屏 9:16</option></select></label>
+            <label>清晰度 <select id="kbQuality"><option value="1920x1080">1080p</option><option value="1280x720">720p（更快）</option></select></label>
+            <label>画面样式 <select id="kbStyle"><option value="editorial">深蓝编辑</option><option value="paper">暖纸质感</option><option value="contrast">高对比</option></select></label>
           </div>
           <div class="config-group image-config">
             <label>图片后端 <span id="imageBackendStatus" class="status-badge">检测中...</span></label>
             <button id="imageConfigBtn" class="secondary">配置说明</button>
           </div>
         </div>
+
+        <figure id="kbStylePreview" class="kb-style-preview" data-style="editorial" aria-label="样式预览">
+          <span>样式预览</span><strong>知识，让行动更清晰</strong><small>ONTO KB · 01 / 06</small>
+        </figure>
 
         <p id="kbMessage" role="status"></p>
         <div id="kbLibrary" class="kb-library"></div>
