@@ -333,6 +333,21 @@ def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_siz
                             scene_manifest=manifest)
 
 
+def test_legacy_mode_does_not_report_missing_scenes(monkeypatch, tmp_path, tiny_size):
+    monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
+    script = {'id': 'legacy', 'segments': [
+        {'narration': 'First.'},
+        {'narration': 'Second.'},
+    ]}
+
+    final = video.render_script(script, out=tmp_path / 'out', size=tiny_size, burn=False)
+
+    visuals = json.loads((final.parent / 'manifest.json').read_text())['visuals']
+    assert visuals['mode'] == 'legacy'
+    assert visuals['scene_count'] == 0
+    assert visuals['missing_scene_count'] == 0
+
+
 def test_scene_manifest_accepts_legacy_cwd_relative_image_path(monkeypatch, tmp_path):
     """Consume paths emitted when kb_scenes receives its default relative --out."""
     from PIL import Image

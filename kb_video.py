@@ -512,7 +512,9 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
         available = sum(image is not None for image in scene_images) if scene_images is not None else 0
         visuals = {'mode': ('legacy' if scene_images is None else
                             'ken-burns' if motion and available else 'static'),
-                   'scene_count': available, 'missing_scene_count': len(visual_layers) - available,
+                   'scene_count': available,
+                   'missing_scene_count': (0 if scene_images is None else
+                                           len(scene_images) - available),
                    'motion_scale': .04 if motion and available else 0,
                    'fade_seconds_max': .25 if motion and available else 0,
                    'subtitle_safe_area': {'bottom_fraction': .18},
