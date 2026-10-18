@@ -127,6 +127,19 @@ def test_hash_options():
     assert digest != autogen.content_hash(dict(item, key_points=['new']), {'voice': 'one'})
 
 
+def test_image_config_change_invalidates(setup, stub_render, monkeypatch):
+    _, out, args = setup
+    monkeypatch.setenv('KB_IMAGE_MODEL', 'model-one')
+    assert autogen.main(args) == 0
+    first = state(out)['a']['hash']
+    assert autogen.main(args) == 0
+    assert len(stub_render) == 1
+    monkeypatch.setenv('KB_IMAGE_MODEL', 'model-two')
+    assert autogen.main(args) == 0
+    assert state(out)['a']['hash'] != first
+    assert len(stub_render) == 2
+
+
 @pytest.fixture
 def stub_render(monkeypatch):
     calls = []
@@ -202,3 +215,28 @@ def test_backend_and_voice_passthrough(setup, monkeypatch):
     assert autogen.main(args + ['--tts', 'edge', '--voice', 'zh-CN-YunyangNeural']) == 1
     assert state(out)['a']['hash'] != digest
     assert captured == [('say', 'Tingting'), ('edge', 'zh-CN-YunyangNeural')]
+
+
+def test_interrupted_format_resumes_completed_output(setup, stub_render, monkeypatch):
+    _, out, args = setup
+    real = autogen.kb_video.render_script
+    calls = 0
+
+    def interrupt_second(*call_args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise KeyboardInterrupt
+        return real(*call_args, **kwargs)
+
+    monkeypatch.setattr(autogen.kb_video, 'render_script', interrupt_second)
+    with pytest.raises(KeyboardInterrupt):
+        autogen.main(args + ['--formats', 'landscape,vertical'])
+    interrupted = state(out)['a']
+    assert interrupted['status'] == 'running'
+    assert interrupted['completed_formats'].keys() == {'landscape'}
+
+    monkeypatch.setattr(autogen.kb_video, 'render_script', real)
+    assert autogen.main(args + ['--formats', 'landscape,vertical']) == 0
+    assert state(out)['a']['status'] == 'done'
+    assert len(stub_render) == 2

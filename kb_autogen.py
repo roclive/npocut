@@ -16,8 +16,15 @@ import time
 from urllib.error import URLError
 from urllib.parse import quote, urlsplit
 
+import kb_images
+import kb_scenes
 import kb_source
 import kb_video
+
+
+STATE_VERSION = 2
+MAX_ATTEMPTS = 3
+RETRY_DELAYS = (0.1, 0.2)
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -76,6 +83,33 @@ def content_hash(item: dict, options: dict) -> str:
     content['url'] = item.get('url', '')
     return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True,
                                      separators=(',', ':')).encode()).hexdigest()
+
+
+def valid_output(out: Path, relative: str) -> bool:
+    """Return true only for a completed video bundle, not a partial mp4."""
+    try:
+        video = out / relative
+        data = json.loads((video.parent / 'manifest.json').read_text(encoding='utf-8'))
+        declared = data.get('files', {}).get('final')
+        return (video.is_file() and video.stat().st_size > 0
+                and (declared is None or declared == video.name))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def retry(operation):
+    """Retry transient local/network failures with a small bounded backoff."""
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            return operation()
+        except (OSError, URLError, TimeoutError, RuntimeError):
+            if attempt == len(RETRY_DELAYS):
+                raise
+            time.sleep(RETRY_DELAYS[attempt])
+
+
+def save_state(path: Path, state: dict) -> None:
+    atomic_write(path, json.dumps(state, ensure_ascii=False, indent=2) + '\n')
 
 
 def write_gallery(out: Path, state: dict) -> None:
@@ -147,7 +181,11 @@ def main(argv=None) -> int:
         size = tuple(map(int, args.size.lower().split('x')))
         if len(size) != 2 or any(n < 32 or n % 2 for n in size) or args.limit < 0 or args.max_points < 0:
             raise ValueError('Use even --size WxH >=32 and nonnegative limits')
-        options = dict(layout_version=3, tts=args.tts, formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
+        image_config = kb_images.Config.from_env()
+        options = dict(state_version=STATE_VERSION, layout_version=3, scene_schema=1,
+                       image=dict(provider=image_config.provider, model=image_config.model,
+                                  style=kb_scenes.STYLE, size=[512, 512]),
+                       tts=args.tts, formats=sorted(args.formats), size=size, voice=args.voice, lang=args.lang,
                        max_points=args.max_points, burn=not args.no_burn,
                        font=kb_video.font_path(), fake_tts=os.environ.get('NPOCUT_FAKE_TTS') == '1')
         try:
@@ -188,8 +226,9 @@ def main(argv=None) -> int:
                 old = state.get(item_id, {})
                 changed = old.get('hash') != digest
                 missing = old.get('status') == 'done' and (not old.get('outputs') or any(
-                    not (args.out / output).is_file() for output in old.get('outputs', [])))
-                eligible = (changed or missing or (old.get('status') == 'failed' and old.get('attempts', 0) < 3)
+                    not valid_output(args.out, output) for output in old.get('outputs', [])))
+                eligible = (changed or missing or (old.get('status') in ('failed', 'running')
+                                                    and old.get('attempts', 0) < MAX_ATTEMPTS)
                             or args.force == item_id)
                 if (not eligible or selected >= args.limit or
                         (args.kinds and item.get('kind') not in args.kinds)):
@@ -200,29 +239,66 @@ def main(argv=None) -> int:
                 if args.dry_run:
                     counts['skipped'] += 1
                     continue
-                record = dict(hash=digest, status='failed', outputs=old.get('outputs', []), error=None,
+                reusable = old.get('hash') == digest
+                record = dict(hash=digest, config=options, status='running',
+                              outputs=list(old.get('outputs', [])) if reusable else [], error=None,
+                              completed_formats=dict(old.get('completed_formats', {})) if reusable else {},
                               updated_at=datetime.now(timezone.utc).isoformat(),
                               attempts=1 if changed else old.get('attempts', 0) + 1)
+                state[item_id] = record
+                save_state(state_path, state)
                 try:
                     script = kb_source.build_script(item, args.max_points, args.lang)
                     script['categories'] = item.get('categories', [])
                     item_out = args.out
-                    outputs = []
+                    scene_relative = f'{slugs[item_id]}/scenes/scene-manifest.json'
+                    scene_path = args.out / scene_relative
+                    scene_ok = (reusable and old.get('scene_manifest') == scene_relative
+                                and scene_path.is_file())
+                    if not scene_ok:
+                        try:
+                            plan = kb_scenes.build_scene_plan(item, script)
+                        except ValueError:
+                            # Sparse legacy OntoKB records can still produce the
+                            # original text-only video even when no valid visual
+                            # storyboard can be derived from their source fields.
+                            scene_path = None
+                        else:
+                            retry(lambda: kb_scenes.render_scene_plan(
+                                plan, scene_path.parent, cache_dir=args.out / '.image_cache',
+                                config=image_config))
+                    record['scene_manifest'] = scene_relative if scene_path else None
+                    record['phase'] = 'images_done' if scene_path else 'images_skipped'
+                    record['updated_at'] = datetime.now(timezone.utc).isoformat()
+                    save_state(state_path, state)
+                    outputs = [output for output in record['outputs'] if valid_output(args.out, output)]
+                    completed = {fmt: output for fmt, output in record['completed_formats'].items()
+                                 if output in outputs}
                     for fmt in args.formats:
                         dimensions = ((max(size), min(size)) if fmt == 'landscape' else
                                       (min(size), max(size)))
-                        final = kb_video.render_script(script, out=item_out, size=dimensions,
-                                                      voice=args.voice, lang=args.lang, tts=args.tts,
-                                                      burn=not args.no_burn, output_slug=slugs[item_id])
+                        if fmt in completed:
+                            continue
+                        final = retry(lambda: kb_video.render_script(
+                            script, out=item_out, size=dimensions,
+                            voice=args.voice, lang=args.lang, tts=args.tts, burn=not args.no_burn,
+                            output_slug=slugs[item_id], scene_manifest=scene_path))
                         outputs.append(str(final.resolve().relative_to(args.out.resolve())))
-                    record.update(status='done', outputs=outputs)
+                        completed[fmt] = outputs[-1]
+                        record.update(outputs=outputs, completed_formats=completed,
+                                      phase=f'video_{fmt}_done',
+                                      updated_at=datetime.now(timezone.utc).isoformat())
+                        save_state(state_path, state)
+                    record.update(status='done', outputs=outputs, phase='done', error=None,
+                                  updated_at=datetime.now(timezone.utc).isoformat())
                     counts['generated'] += 1
                 except Exception as exc:
+                    record['status'] = 'failed'
                     record['error'] = str(exc)
                     counts['failed'] += 1
                     print(f'failed: {item_id}: {exc}')
                 state[item_id] = record
-                atomic_write(state_path, json.dumps(state, ensure_ascii=False, indent=2) + '\n')
+                save_state(state_path, state)
             if not args.dry_run:
                 write_gallery(args.out, state)
     except RuntimeError as exc:
