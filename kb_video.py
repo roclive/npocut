@@ -287,11 +287,14 @@ def load_scene_images(scene_manifest: str | Path, script: dict) -> list[Path | N
 
 
 def draw_visual_layers(script: dict, segment: dict, index: int, size: tuple[int, int],
-                       artwork: Path, background: Path, overlay: Path) -> None:
+                       artwork: Path | None, background: Path, overlay: Path) -> None:
     """Make a movable image layer and a fixed text/progress layer."""
-    with Image.open(artwork) as source:
-        visual = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
-    visual = Image.blend(visual, Image.new('RGB', size, '#081321'), .32)
+    if artwork is None:
+        visual = Image.new('RGB', size, '#101e31')
+    else:
+        with Image.open(artwork) as source:
+            visual = ImageOps.fit(source.convert('RGB'), size, method=Image.Resampling.LANCZOS)
+        visual = Image.blend(visual, Image.new('RGB', size, '#081321'), .32)
     visual.save(background)
     # Reuse the proven typography, then make its plain background transparent.
     flat = overlay.with_name(overlay.stem + '-flat.png')
@@ -348,6 +351,13 @@ def assemble(slides: list[Path], audio: list[Path], durations: list[float], tmp:
             ffmpeg('-loop', 1, '-framerate', 30, '-i', background,
                    '-loop', 1, '-framerate', 30, '-i', overlay, '-t', seconds,
                    '-filter_complex', vf, '-an', '-c:v', 'libx264', '-preset', 'ultrafast',
+                   '-pix_fmt', 'yuv420p', '-r', 30, clip)
+        elif layers:
+            background, overlay = layers
+            ffmpeg('-loop', 1, '-framerate', 30, '-i', background,
+                   '-loop', 1, '-framerate', 30, '-i', overlay, '-t', seconds,
+                   '-filter_complex', '[0:v][1:v]overlay=0:0:shortest=1,format=yuv420p',
+                   '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage',
                    '-pix_fmt', 'yuv420p', '-r', 30, clip)
         else:
             ffmpeg('-loop', 1, '-framerate', 30, '-i', slide, '-t', seconds,
@@ -485,7 +495,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
             artwork = scene_images[i] if scene_images else None
             draw_slide(script, segment, i, size, slide, artwork)
-            if artwork:
+            if scene_images is not None:
                 background, overlay = tmp / f'visual-{i}.png', tmp / f'overlay-{i}.png'
                 draw_visual_layers(script, segment, i, size, artwork, background, overlay)
                 visual_layers.append((background, overlay))
@@ -499,7 +509,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
         if burn:
             burn_subtitles(video, final, size, tmp)
         files = {'video': 'video.mp4', 'subtitles': 'subs.srt', 'final': final.name}
-        available = sum(layer is not None for layer in visual_layers)
+        available = sum(image is not None for image in scene_images) if scene_images is not None else 0
         visuals = {'mode': ('legacy' if scene_images is None else
                             'ken-burns' if motion and available else 'static'),
                    'scene_count': available, 'missing_scene_count': len(visual_layers) - available,

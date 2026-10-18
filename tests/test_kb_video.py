@@ -15,6 +15,18 @@ from kb_source import load_library
 FIXTURE = ROOT / 'tests/fixtures/ontokb_reading.json'
 
 
+def assert_chapter_progress_visible(path, size, tmp_path):
+    """Check the fixed teal progress bar in a decoded frame, not its source PNG."""
+    from PIL import Image
+    frame = tmp_path / f'progress-{len(list(tmp_path.glob("progress-*.png")))}.png'
+    video.ffmpeg('-ss', .1, '-i', path, '-frames:v', 1, frame)
+    with Image.open(frame) as image:
+        width, height = size
+        pixels = image.convert('RGB').crop((0, int(height * .78), width, int(height * .84)))
+        assert any(g > r * 1.45 and g > b * 1.05 and g > 90
+                   for r, g, b in pixels.getdata())
+
+
 @pytest.mark.parametrize('vertical', [False, True])
 def test_render_fixture(monkeypatch, tmp_path, vertical):
     monkeypatch.setenv('NPOCUT_FAKE_TTS', '1')
@@ -293,6 +305,10 @@ def test_scene_images_motion_and_low_performance(tmp_path, motion, expected):
     data = probe_json(final)
     assert any(s['codec_type'] == 'audio' for s in data['streams'])
     video.ffmpeg('-i', final, '-f', 'null', '-')
+    if not motion:
+        # Low-performance encoding must composite the fixed overlay instead of
+        # falling back to the old precomposed slide (which has no progress bar).
+        assert_chapter_progress_visible(final, (64, 36), tmp_path)
 
 
 def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_size):
@@ -306,6 +322,9 @@ def test_scene_manifest_validation_and_missing_image_fallback(tmp_path, tiny_siz
     data = json.loads((final.parent / 'manifest.json').read_text())
     assert data['visuals']['mode'] == 'static'
     assert data['visuals']['missing_scene_count'] == 1
+    # A missing scene image still uses the fixed scene overlay over a dark
+    # background, including chapter progress.
+    assert_chapter_progress_visible(final, tiny_size, tmp_path)
     broken = json.loads(manifest.read_text())
     broken['scenes'][0]['narration']['text'] = 'Different.'
     manifest.write_text(json.dumps(broken), encoding='utf-8')
