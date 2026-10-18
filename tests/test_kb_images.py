@@ -1,4 +1,5 @@
 import base64
+import http.client
 import io
 import json
 from pathlib import Path
@@ -60,6 +61,42 @@ def test_api_failure_no_retry_or_secret_leak(tmp_path, monkeypatch):
     with pytest.raises(ImageError, match='HTTP 401') as error:
         generate('library', tmp_path / 'fail.png', Config('openai'))
     assert 'secret-test-key' not in str(error.value)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('fallback', [False, True])
+def test_interrupted_response_uses_explicit_fallback(tmp_path, monkeypatch, fallback):
+    Image = pytest.importorskip('PIL.Image')
+    monkeypatch.setenv('OPENAI_API_KEY', 'secret-test-key')
+    calls = []
+
+    class InterruptedResponse(io.BytesIO):
+        def read(self, size=-1):
+            raise http.client.IncompleteRead(b'secret-test-key', 100)
+
+    def request(req, timeout):
+        calls.append(req)
+        return InterruptedResponse()
+
+    monkeypatch.setattr('urllib.request.urlopen', request)
+    path = tmp_path / 'interrupted.png'
+    if fallback:
+        result = generate('library', path, Config('openai'), fallback=True)
+        assert result['provider'] == 'gradient'
+        assert result['ai_generated'] is False
+        assert 'connection failed' in result['blocked_reason']
+        assert 'secret-test-key' not in result['blocked_reason']
+        with Image.open(path) as image:
+            assert image.size == (512, 512)
+            image.verify()
+        assert path.with_suffix('.svg').is_file()
+        assert json.loads(path.with_suffix('.json').read_text()) == result
+    else:
+        with pytest.raises(ImageError, match='connection failed') as error:
+            generate('library', path, Config('openai'))
+        assert 'secret-test-key' not in str(error.value)
+        assert not path.exists()
+        assert not path.with_suffix('.json').exists()
     assert len(calls) == 1
 
 

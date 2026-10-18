@@ -3,6 +3,7 @@ import argparse
 import base64
 from dataclasses import dataclass
 import hashlib
+import http.client
 import io
 import json
 import os
@@ -97,7 +98,7 @@ class OpenAIProvider:
         except urllib.error.HTTPError as error:
             # Do not echo response bodies, which can contain credentials or prompts.
             raise ImageError(f'OpenAI HTTP {error.code}; check account access, billing and model availability') from None
-        except (urllib.error.URLError, TimeoutError, OSError):
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.IncompleteRead):
             raise ImageError('OpenAI connection failed or timed out; no automatic retry') from None
         try:
             image_bytes = base64.b64decode(result['data'][0]['b64_json'], validate=True)
