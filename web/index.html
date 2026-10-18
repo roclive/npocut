@@ -39,15 +39,31 @@
       </header>
 
       <section id="kbPanel" class="kb-panel" hidden aria-label="知识库素材">
-        <div class="kb-toolbar">
+        <div class="kb-header">
           <h2>知识库素材</h2>
-          <button id="kbRefresh" type="button">刷新知识库</button>
-          <label class="file-button secondary"><input id="kbJson" type="file" accept=".json,application/json" /><span>导入 JSON</span></label>
-          <label>语言 <select id="kbLang"><option value="zh">中文</option><option value="ja">日本語</option><option value="en">English</option></select></label>
-          <label>配音 <select id="kbTts"><option value="auto">自动（Edge，失败退回本机）</option><option value="edge">Edge 神经语音</option><option value="say">本机 macOS</option></select></label>
-          <label>声音 <select id="kbVoice" aria-label="声音" disabled><option>正在加载…</option></select></label>
-          <span id="kbVoiceMessage" role="status"></span>
+          <div class="kb-top-actions">
+            <button id="kbRefresh" type="button">刷新</button>
+            <label class="file-button secondary"><input id="kbJson" type="file" accept=".json,application/json" /><span>导入 JSON</span></label>
+          </div>
         </div>
+
+        <div class="kb-search-bar">
+          <input id="kbSearch" type="text" placeholder="搜索知识库内容..." />
+        </div>
+
+        <div class="kb-config-grid">
+          <div class="config-group">
+            <label>语言 <select id="kbLang"><option value="zh">中文</option><option value="ja">日本語</option><option value="en">English</option></select></label>
+            <label>配音 <select id="kbTts"><option value="auto">自动（Edge，失败退回本机）</option><option value="edge">Edge 神经语音</option><option value="say">本机 macOS</option></select></label>
+            <label>声音 <select id="kbVoice" aria-label="声音" disabled><option>正在加载…</option></select></label>
+            <span id="kbVoiceMessage" role="status"></span>
+          </div>
+          <div class="config-group image-config">
+            <label>图片后端 <span id="imageBackendStatus" class="status-badge">检测中...</span></label>
+            <button id="imageConfigBtn" class="secondary">配置说明</button>
+          </div>
+        </div>
+
         <p id="kbMessage" role="status"></p>
         <div id="kbLibrary" class="kb-library"></div>
       </section>

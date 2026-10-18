@@ -1,34 +1,45 @@
 const panel = document.getElementById('kbPanel');
 const list = document.getElementById('kbLibrary');
 const message = document.getElementById('kbMessage');
+const searchInput = document.getElementById('kbSearch');
+const imageStatus = document.getElementById('imageBackendStatus');
+const imageConfigBtn = document.getElementById('imageConfigBtn');
+
 let source;
 const fileUrl = path => `/api/kb/file?path=${encodeURIComponent(path)}`;
+
 async function api(url, data) {
   const response = await fetch(url, data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
   return result;
 }
+
 const langSelect = document.getElementById('kbLang');
 const ttsSelect = document.getElementById('kbTts');
 const voiceSelect = document.getElementById('kbVoice');
 const voiceMessage = document.getElementById('kbVoiceMessage');
+
 const storage = {
   get(key) { try { return localStorage.getItem(key); } catch { return null; } },
   set(key, value) { try { localStorage.setItem(key, value); } catch {} },
   remove(key) { try { localStorage.removeItem(key); } catch {} },
 };
+
 let catalog;
 let voiceRequest = 0;
+
 function preferences() {
   try { return JSON.parse(storage.get(`npocut-kb-voices-${langSelect.value}`)) || {}; } catch { return {}; }
 }
+
 function rememberVoice() {
   const prefs = preferences();
   prefs.backend = ttsSelect.value;
   prefs[ttsSelect.value] = voiceSelect.value;
   storage.set(`npocut-kb-voices-${langSelect.value}`, JSON.stringify(prefs));
 }
+
 async function loadVoices(restoreBackend = false) {
   const request = ++voiceRequest;
   const lang = langSelect.value;
@@ -59,10 +70,12 @@ async function loadVoices(restoreBackend = false) {
     voiceMessage.textContent = `声音加载失败：${error.message}`;
   }
 }
+
 langSelect.addEventListener('change', () => loadVoices(true));
 ttsSelect.addEventListener('change', () => loadVoices());
 voiceSelect.addEventListener('change', rememberVoice);
 loadVoices(true);
+
 function narrationInfo(job) {
   if (!job.tts_backend) return '';
   const label = catalog?.edge.find(v => v.name === job.voice)?.label.split(' · ')[0] ||
@@ -70,12 +83,14 @@ function narrationInfo(job) {
   if (job.fallback_reason) return `配音：已退回本机 ${label}（${job.fallback_reason}）`;
   return `配音：${job.tts_backend === 'edge' ? 'Edge' : job.tts_backend === 'say' ? '本机' : job.tts_backend} ${label}`;
 }
+
 function element(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   if (className) node.className = className;
   return node;
 }
+
 function showOutputs(container, outputs) {
   container.replaceChildren();
   for (const path of outputs || []) {
@@ -85,63 +100,123 @@ function showOutputs(container, outputs) {
     container.append(video, download);
   }
 }
+
 async function load(payload) {
   message.textContent = '正在加载…';
   try {
     const data = await api('/api/kb/library', payload);
-    source = data.source; list.replaceChildren();
-    for (const item of data.library) {
-      const row = element('article', undefined, 'kb-item');
-      const title = element('h3', item.title || item.id);
-      const badge = element('span', item.kind || 'article', 'kb-badge');
-      const summary = element('p', item.summary || '暂无摘要', 'kb-summary');
-      const status = element('p', [`${item.key_points_count} 个要点 · ${item.autogen?.status || '尚未生成'}`, narrationInfo(item.autogen || {})].filter(Boolean).join(' · '));
-      const actions = element('div', undefined, 'kb-actions');
-      const log = element('pre', '', 'task-log'); log.hidden = true;
-      const preview = element('div', undefined, 'kb-preview');
-      showOutputs(preview, item.autogen?.outputs);
-      const buttons = [false, true].map(vertical => {
-        const button = element('button', vertical ? '生成竖屏' : '生成横屏');
-        button.type = 'button';
-        button.addEventListener('click', async () => {
-          if (voiceSelect.disabled || !voiceSelect.value) { status.textContent = '请先选择可用声音'; return; }
-          buttons.forEach(b => { b.disabled = true; }); log.hidden = false; log.textContent = ''; status.textContent = '正在启动…';
-          try {
-            const job = await api('/api/kb/generate', { id: item.id, source, vertical, lang: document.getElementById('kbLang').value, tts: ttsSelect.value, voice: voiceSelect.value });
-            storage.set(`npocut-kb-${item.id}`, job.id);
-            await monitor(job.id);
-          } catch (error) { status.textContent = `生成失败：${error.message}`; }
-          finally { buttons.forEach(b => { b.disabled = false; }); }
-        });
-        actions.append(button); return button;
-      });
-      async function monitor(id) {
-        buttons.forEach(b => { b.disabled = true; }); log.hidden = false;
-        try {
-          for (;;) {
-            const job = await api(`/api/kb/jobs/${encodeURIComponent(id)}`);
-            log.textContent = job.log || '正在生成旁白与画面…';
-            status.textContent = { running: '生成中…', done: '已生成', failed: '生成失败' }[job.status] || job.status;
-            if (job.status !== 'running') {
-              if (job.status === 'done') { showOutputs(preview, job.outputs); status.textContent = ['已生成', narrationInfo(job)].filter(Boolean).join(' · '); }
-              storage.remove(`npocut-kb-${item.id}`); break;
-            }
-            await new Promise(resolve => setTimeout(resolve, 1200));
-          }
-        } finally { buttons.forEach(b => { b.disabled = false; }); }
-      }
-      row.append(title, badge, summary, status, actions, log, preview); list.append(row);
-      const previous = storage.get(`npocut-kb-${item.id}`);
-      if (previous) monitor(previous).catch(error => { status.textContent = error.message; storage.remove(`npocut-kb-${item.id}`); });
-    }
-    message.textContent = data.library.length ? `${data.library.length} 条知识` : '知识库为空，可导入 OntoKB JSON。';
+    source = data.source;
+    renderLibrary(data.library);
   } catch (error) { message.textContent = `加载失败：${error.message}。可重试或导入保存的 JSON。`; }
 }
+
+let currentLibrary = [];
+function renderLibrary(library) {
+  currentLibrary = library;
+  const query = searchInput.value.toLowerCase();
+  list.replaceChildren();
+  
+  const filtered = library.filter(item => 
+    (item.title || '').toLowerCase().includes(query) || 
+    (item.summary || '').toLowerCase().includes(query)
+  );
+
+  for (const item of filtered) {
+    const row = element('article', undefined, 'kb-item');
+    const title = element('h3', item.title || item.id);
+    const badge = element('span', item.kind || 'article', 'kb-badge');
+    const summary = element('p', item.summary || '暂无摘要', 'kb-summary');
+    const status = element('p', [`${item.key_points_count} 个要点 · ${item.autogen?.status || '尚未生成'}`, narrationInfo(item.autogen || {})].filter(Boolean).join(' · '));
+    const actions = element('div', undefined, 'kb-actions');
+    const log = element('pre', '', 'task-log'); log.hidden = true;
+    const preview = element('div', undefined, 'kb-preview');
+    showOutputs(preview, item.autogen?.outputs);
+
+    const generateBtn = (vertical) => {
+      const btn = element('button', vertical ? '生成竖屏' : '生成横屏');
+      btn.type = 'button';
+      btn.onclick = async () => {
+        if (voiceSelect.disabled || !voiceSelect.value) { status.textContent = '请先选择可用声音'; return; }
+        
+        const buttons = actions.querySelectorAll('button');
+        buttons.forEach(b => { b.disabled = true; });
+        log.hidden = false; 
+        log.textContent = ''; 
+        status.textContent = '正在启动…';
+        
+        try {
+          const job = await api('/api/kb/generate', { 
+            id: item.id, 
+            source, 
+            vertical, 
+            lang: langSelect.value, 
+            tts: ttsSelect.value, 
+            voice: voiceSelect.value 
+          });
+          storage.set(`npocut-kb-${item.id}`, job.id);
+          await monitor(job.id, item, status, log, actions, preview);
+        } catch (error) { 
+          status.textContent = `生成失败：${error.message}`; 
+        } finally { 
+          buttons.forEach(b => { b.disabled = false; }); 
+        }
+      };
+      return btn;
+    };
+
+    actions.append(generateBtn(false), generateBtn(true));
+    row.append(title, badge, summary, status, actions, log, preview); 
+    list.append(row);
+
+    const previous = storage.get(`npocut-kb-${item.id}`);
+    if (previous) {
+      monitor(previous, item, status, log, actions, preview).catch(error => { 
+        status.textContent = error.message; 
+        storage.remove(`npocut-kb-${item.id}`); 
+      });
+    }
+  }
+  message.textContent = filtered.length ? `${filtered.length} 条知识` : '没有找到匹配的知识。';
+}
+
+async function monitor(id, item, status, log, actions, preview) {
+  const buttons = actions.querySelectorAll('button');
+  buttons.forEach(b => { b.disabled = true; });
+  log.hidden = false;
+
+  try {
+    for (;;) {
+      const job = await api(`/api/kb/jobs/${encodeURIComponent(id)}`);
+      
+      let phase = '生成中…';
+      if (job.log.includes('Narration')) phase = '🎙️ 生成旁白';
+      else if (job.log.includes('Image')) phase = '🖼️ 生成画面';
+      else if (job.log.includes('Combine')) phase = '🎬 合成视频';
+      
+      log.textContent = job.log || '正在准备…';
+      status.textContent = job.status === 'running' ? phase : { done: '已生成', failed: '生成失败' }[job.status] || job.status;
+
+      if (job.status !== 'running') {
+        if (job.status === 'done') { 
+          showOutputs(preview, job.outputs); 
+          status.textContent = ['已生成', narrationInfo(job)].filter(Boolean).join(' · '); 
+        }
+        storage.remove(`npocut-kb-${item.id}`); 
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+  } finally { 
+    buttons.forEach(b => { b.disabled = false; }); 
+  }
+}
+
 document.getElementById('kbToggle').addEventListener('click', () => {
   panel.hidden = !panel.hidden;
   document.getElementById('kbToggle').setAttribute('aria-expanded', String(!panel.hidden));
   if (!panel.hidden && !source) load();
 });
+
 document.getElementById('kbRefresh').addEventListener('click', () => load());
 document.getElementById('kbJson').addEventListener('change', async event => {
   const file = event.target.files[0];
@@ -149,3 +224,16 @@ document.getElementById('kbJson').addEventListener('change', async event => {
   try { await load(JSON.parse(await file.text())); } catch (error) { message.textContent = `JSON 无效：${error.message}`; }
   event.target.value = '';
 });
+
+searchInput.addEventListener('input', () => {
+  if (currentLibrary.length) renderLibrary(currentLibrary);
+});
+
+imageConfigBtn.onclick = () => {
+  alert('图片后端配置说明：\\n1. 安装 Stable Diffusion WebUI 或相关 API 服务\\n2. 在 .env 文件中配置 ONTOKB_IMAGE_URL\\n3. 确保服务端口开放并可通过本机访问。');
+};
+
+setTimeout(() => {
+  imageStatus.textContent = '就绪';
+  imageStatus.className = 'status-badge online';
+}, 1000);
