@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -26,6 +27,12 @@ from kb_templates import build_template_script, split_segment, template_names
 
 PAD = 0.4
 SAY_DEFAULT_VOICE = 'Tingting'
+PHASE_PREFIX = 'NPOCUT_PHASE:'
+
+
+def report_phase(phase: str) -> None:
+    """Emit a machine-readable progress event for web and CLI consumers."""
+    print(f'{PHASE_PREFIX}{phase}', file=sys.stderr, flush=True)
 
 
 def ffmpeg(*args: object, cwd: Path | None = None) -> None:
@@ -204,11 +211,19 @@ def fit_text(text: str, width: int, height: int, initial: int):
 
 
 def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], target: Path,
-               artwork: Path | None = None) -> None:
+               artwork: Path | None = None, style: str = 'editorial') -> None:
     width, height = size
+    palettes = {
+        'editorial': ('#101e31', '#53d7bd', '#ffffff', '#d4e2ef', '#8fa7bf'),
+        'paper': ('#eee9df', '#b85c38', '#28231f', '#504941', '#746b62'),
+        'contrast': ('#090909', '#f4d35e', '#ffffff', '#e6e6e6', '#a8a8a8'),
+    }
+    if style not in palettes:
+        raise ValueError('Unknown visual style')
+    background, accent, heading_color, body_color, footer_color = palettes[style]
     template = script.get('template') or {}
     colors = template.get('colors') or {}
-    background_color = colors.get('background', '#101e31')
+    background_color = colors.get('background', background)
     veil_color = colors.get('veil', '#081321')
     font_scale = float(template.get('font_scale', 1))
     if artwork is None:
@@ -223,7 +238,7 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
     usable = width - margin * 2
     short = min(size)
     draw.rounded_rectangle((margin, int(height * .09), width-margin, int(height * .105)),
-                           radius=2, fill=colors.get('accent', '#53d7bd'))
+                           radius=2, fill=colors.get('accent', accent))
     title = segment.get('kind') == 'title'
     heading = str(segment.get('heading', ''))
     body = str(segment.get('text', ''))
@@ -243,8 +258,8 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
     bf, bodies, bs = fit_text(body, usable, max(1, body_height), max(1, int(short * .055 * font_scale)))
     block_height = len(headings) * hs + gap + len(bodies) * bs
     y = top + (available - block_height) / 2
-    for lines, font, spacing, color in [(headings, hf, hs, colors.get('heading', '#ffffff')),
-                                        (bodies, bf, bs, colors.get('body', '#d4e2ef'))]:
+    for lines, font, spacing, color in [(headings, hf, hs, colors.get('heading', heading_color)),
+                                        (bodies, bf, bs, colors.get('body', body_color))]:
         for line in lines:
             draw.text((margin, y), line, font=font, fill=color)
             y += spacing
@@ -255,7 +270,7 @@ def draw_slide(script: dict, segment: dict, index: int, size: tuple[int, int], t
                                     max(1, int(short*.020)))
     y = height * .76
     for line in lines:
-        draw.text((margin, y), line, font=font, fill=colors.get('footer', '#8fa7bf'))
+        draw.text((margin, y), line, font=font, fill=colors.get('footer', footer_color))
         y += spacing
     image.save(target)
 
@@ -458,7 +473,8 @@ def write_manifest(script: dict, durations: list[float], voice: str,
 def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080),
                   voice: str | None = None, lang: str | None = None, burn: bool = True,
                   custom_size: bool = False, output_slug: str | None = None, tts: str = "auto",
-                  scene_manifest: str | Path | None = None, motion: bool = True) -> Path:
+                  scene_manifest: str | Path | None = None, motion: bool = True,
+                  style: str = 'editorial') -> Path:
     script = copy.deepcopy(script)
     if not isinstance(script, dict) or not isinstance(script.get('segments'), list) or not script['segments']:
         raise ValueError('VideoScript must contain a nonempty segments list')
@@ -552,6 +568,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                         shutil.move(tmp / f'audio-kept-{new_index}.wav',
                                     tmp / f'audio-{new_index}.wav')
 
+        report_phase('narration')
         try:
             synthesize_all()
         except Exception as exc:
@@ -562,10 +579,11 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
             backend = 'say'
             voice = choose_voice(language)
             synthesize_all()
+        report_phase('images')
         for i, segment in enumerate(script['segments']):
             wav, slide = tmp / f'audio-{i}.wav', tmp / f'slide-{i}.png'
             artwork = scene_images[i] if scene_images else None
-            draw_slide(script, segment, i, size, slide, artwork)
+            draw_slide(script, segment, i, size, slide, artwork, style)
             if scene_images is not None:
                 background, overlay = tmp / f'visual-{i}.png', tmp / f'overlay-{i}.png'
                 draw_visual_layers(script, segment, i, size, artwork, background, overlay)
@@ -574,6 +592,7 @@ def render_script(script: dict, *, out: Path = Path('kb_out'), size=(1920, 1080)
                 visual_layers.append(None)
             audio.append(wav)
             slides.append(slide)
+        report_phase('combine')
         video = assemble(slides, audio, durations, tmp, visual_layers, motion)
         make_subtitles(script, durations, tmp / 'subs.srt', size, boundaries)
         final = tmp / f'{slug}.subbed.mp4' if burn else video
@@ -608,6 +627,7 @@ def main(argv=None) -> int:
     parser.add_argument('--script', type=Path)
     parser.add_argument('--vertical', action='store_true')
     parser.add_argument('--size', help='Even WxH dimensions; vertical swaps landscape dimensions')
+    parser.add_argument('--style', choices=['editorial', 'paper', 'contrast'], default='editorial')
     parser.add_argument('--tts', choices=['auto', 'edge', 'say'], default='auto')
     parser.add_argument('--voice')
     parser.add_argument('--lang', choices=['zh', 'ja', 'en'])
@@ -641,7 +661,7 @@ def main(argv=None) -> int:
         print(render_script(script, out=args.out, size=size, voice=args.voice,
                             lang=args.lang, tts=args.tts, burn=not args.no_burn,
                             custom_size=bool(args.size), scene_manifest=args.scenes,
-                            motion=not args.low_performance))
+                            motion=not args.low_performance, style=args.style))
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'kb_video: {exc}\n')
     return 0
