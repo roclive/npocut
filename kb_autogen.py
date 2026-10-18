@@ -43,27 +43,30 @@ def atomic_write(path: Path, text: str) -> None:
 
 @contextmanager
 def run_lock(out: Path):
-    """Exclusive cron lease; abandoned leases expire after two hours."""
+    """Hold an exclusive lock for the process lifetime of an autogen run."""
     out.mkdir(parents=True, exist_ok=True)
     path = out / '.autogen.lock'
-    # Serialize stale-lease reclamation so two cron processes cannot both
-    # remove and replace the same abandoned lease.
+    fd = None
     with (out / '.autogen.guard').open('a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)
         try:
-            if path.exists():
-                if time.time() - path.stat().st_mtime <= 7200:
-                    raise RuntimeError('autogen locked, skipped')
-                path.unlink()
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                fd = None
+                raise RuntimeError('autogen locked, skipped')
+            os.ftruncate(fd, 0)
+            os.write(fd, f'{os.getpid()}\n'.encode())
+            os.fsync(fd)
         finally:
             fcntl.flock(guard, fcntl.LOCK_UN)
+    assert fd is not None
     identity = os.fstat(fd)
     try:
-        os.write(fd, f'{os.getpid()}\n'.encode())
         yield
     finally:
-        os.close(fd)
         with (out / '.autogen.guard').open('a') as guard:
             fcntl.flock(guard, fcntl.LOCK_EX)
             try:
@@ -72,6 +75,8 @@ def run_lock(out: Path):
             except FileNotFoundError:
                 pass
             finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+                os.close(fd)
                 fcntl.flock(guard, fcntl.LOCK_UN)
 
 
@@ -106,6 +111,35 @@ def retry(operation):
             if attempt == len(RETRY_DELAYS):
                 raise
             time.sleep(RETRY_DELAYS[attempt])
+
+
+def scene_manifest_ready(path: Path) -> bool:
+    """Only reuse a scene manifest when every requested image completed."""
+    try:
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        scenes = manifest['scenes']
+        return bool(scenes) and all(
+            isinstance(scene.get('image'), dict)
+            and not scene['image'].get('blocked_reason')
+            and scene['image'].get('path')
+            and Path(scene['image']['path']).is_file()
+            for scene in scenes)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def render_scenes(plan: dict, scene_path: Path, out: Path, image_config) -> dict:
+    """Render scenes, converting backend fallback results into retryable errors."""
+    manifest = kb_scenes.render_scene_plan(
+        plan, scene_path.parent, cache_dir=out / '.image_cache', config=image_config)
+    blocked = [scene.get('image', {}).get('blocked_reason')
+               for scene in manifest.get('scenes', [])
+               if scene.get('image', {}).get('blocked_reason')]
+    if blocked:
+        raise RuntimeError('image generation blocked: ' + '; '.join(map(str, blocked)))
+    if not scene_manifest_ready(scene_path):
+        raise RuntimeError('image generation produced an incomplete scene manifest')
+    return manifest
 
 
 def save_state(path: Path, state: dict) -> None:
@@ -254,7 +288,7 @@ def main(argv=None) -> int:
                     scene_relative = f'{slugs[item_id]}/scenes/scene-manifest.json'
                     scene_path = args.out / scene_relative
                     scene_ok = (reusable and old.get('scene_manifest') == scene_relative
-                                and scene_path.is_file())
+                                and scene_manifest_ready(scene_path))
                     if not scene_ok:
                         try:
                             plan = kb_scenes.build_scene_plan(item, script)
@@ -264,9 +298,8 @@ def main(argv=None) -> int:
                             # storyboard can be derived from their source fields.
                             scene_path = None
                         else:
-                            retry(lambda: kb_scenes.render_scene_plan(
-                                plan, scene_path.parent, cache_dir=args.out / '.image_cache',
-                                config=image_config))
+                            retry(lambda: render_scenes(
+                                plan, scene_path, args.out, image_config))
                     record['scene_manifest'] = scene_relative if scene_path else None
                     record['phase'] = 'images_done' if scene_path else 'images_skipped'
                     record['updated_at'] = datetime.now(timezone.utc).isoformat()

@@ -95,6 +95,58 @@ def test_lock_and_stale(setup, monkeypatch, capsys):
     assert not lock.exists()
 
 
+def test_old_live_lock_is_not_reclaimed(setup, monkeypatch, capsys):
+    _, out, args = setup
+    monkeypatch.setattr(autogen.kb_video, 'render_script', lambda *a, **kw: pytest.fail('locked'))
+    with autogen.run_lock(out):
+        lock = out / '.autogen.lock'
+        os.utime(lock, (time.time() - 7201,) * 2)
+        assert autogen.main(args) == 0
+        assert lock.exists()
+        assert not (out / 'autogen_state.json').exists()
+    assert 'locked, skipped' in capsys.readouterr().out
+
+
+def test_blocked_images_fail_then_retry_instead_of_becoming_done(setup, stub_render, monkeypatch):
+    _, out, args = setup
+    calls = 0
+
+    def blocked(plan, output, **kwargs):
+        nonlocal calls
+        calls += 1
+        output.mkdir(parents=True, exist_ok=True)
+        manifest = dict(plan, scenes=[dict(
+            plan['scenes'][0], image=dict(path=None, blocked_reason='network offline'))])
+        (output / 'scene-manifest.json').write_text(json.dumps(manifest))
+        return manifest
+
+    monkeypatch.setattr(autogen.kb_scenes, 'render_scene_plan', blocked)
+    assert autogen.main(args) == 1
+    failed = state(out)['a']
+    assert failed['status'] == 'failed'
+    assert failed['attempts'] == 1
+    assert failed['error'] == 'image generation blocked: network offline'
+    assert failed.get('phase') is None
+    assert calls == 3
+    assert stub_render == []
+
+    def succeeding(plan, output, **kwargs):
+        output.mkdir(parents=True, exist_ok=True)
+        image = output / 'recovered.png'
+        image.write_bytes(b'\x89PNG\r\n\x1a\nfixture')
+        manifest = dict(plan, scenes=[dict(plan['scenes'][0], image=dict(path=str(image)))])
+        (output / 'scene-manifest.json').write_text(json.dumps(manifest))
+        return manifest
+
+    # The blocked manifest left by the failed run must not be reusable.
+    monkeypatch.setattr(autogen.kb_scenes, 'render_scene_plan', succeeding)
+    assert autogen.main(args) == 0
+    recovered = state(out)['a']
+    assert recovered['status'] == 'done'
+    assert recovered['attempts'] == 2
+    assert autogen.scene_manifest_ready(out / recovered['scene_manifest'])
+
+
 def test_offline(setup, monkeypatch, capsys):
     _, out, _ = setup
     def offline(*a):
