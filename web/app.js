@@ -71,7 +71,7 @@ const DEFAULT_VIDEO_HEIGHT = 520;
 const MIN_VIDEO_HEIGHT = 260;
 const MAX_VIDEO_HEIGHT = 960;
 const subtitleHeight = clamp(
-  Number(localStorage.getItem("npocut.subtitleHeight") || 1040),
+  Number(localStorage.getItem("npocut.subtitleHeight") || 560),
   360,
   1400,
 );
@@ -86,7 +86,7 @@ const videoPreviewHeight = savedVideoPreviewHeight
   : null;
 
 function setSubtitleHeight(height) {
-  const value = clamp(Number(height) || 1040, 360, 1400);
+  const value = clamp(Number(height) || 560, 360, 1400);
   document.documentElement.style.setProperty("--subtitle-panel-height", `${value}px`);
   els.subtitleHeight.value = String(value);
   localStorage.setItem("npocut.subtitleHeight", String(value));
@@ -100,37 +100,37 @@ function setVideoPreviewHeight(height) {
 
 const modeMeta = {
   clip: {
-    title: "Cut Plan",
+    title: "剪辑计划",
     file: "clip_plan.csv",
     script: "cut_plan.py",
   },
   remove: {
-    title: "Submod",
+    title: "字幕编辑",
     file: "",
     script: "",
   },
   shorts: {
-    title: "Shorts Plan",
+    title: "Shorts 短视频计划",
     file: "shorts_plan.csv",
     script: "make_shorts.py",
   },
   advancedCut: {
-    title: "Advanced Cut",
+    title: "精细剪辑计划",
     file: "cut_plan_new.csv",
     script: "cut_plan.py",
   },
   srt: {
-    title: "SRT",
+    title: "生成字幕",
     file: "",
     script: "generate_srt.py",
   },
   burnSrt: {
-    title: "Burn SRT",
+    title: "烧录字幕",
     file: "",
     script: "burn_existing_srt.py",
   },
   burnVerticalSrt: {
-    title: "Burn 9:16 SRT",
+    title: "竖屏字幕烧录",
     file: "",
     script: "burn_vertical_srt.py",
   },
@@ -530,7 +530,7 @@ async function savePayload(filename, content, preferredTargetPath = "") {
 function setTaskLogPlaceholder() {
   if (!els.taskLog) return;
   state.taskLogHasContent = false;
-  els.taskLog.textContent = "No task output yet.";
+  els.taskLog.textContent = "任务输出将在这里显示。";
 }
 
 function appendTaskLog(text, stream = "info") {
@@ -556,7 +556,7 @@ function updateRuntimeStatus() {
   const runtime = isElectronRuntime() ? "Electron" : "Browser";
   const suffix = isElectronRuntime() && state.userDataPath ? ` / ${state.userDataPath}` : "";
   els.runtimeStatus.textContent = `Runtime: ${runtime}${suffix}`;
-  els.runCommand.textContent = isElectronRuntime() ? "Run" : "Terminal";
+  els.runCommand.textContent = isElectronRuntime() ? "执行任务" : "Terminal";
 }
 
 function updateTaskControls() {
@@ -695,6 +695,7 @@ function updateMode(mode) {
   document.body.dataset.mode = mode;
   document.querySelectorAll(".mode-tab").forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === mode);
+    button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
   });
   els.planTitle.textContent = modeMeta[mode].title;
   els.planMeta.textContent = modeMeta[mode].file || modeMeta[mode].script;
@@ -1611,10 +1612,10 @@ function render() {
           : "Load SRT"
       : modeMeta[state.mode].file || modeMeta[state.mode].script;
   els.exportPlan.textContent =
-    state.mode === "advancedCut" ? "Export Cut Plan" : state.mode === "remove" ? "Save SRT" : "Export";
-  els.clearPlan.textContent = state.mode === "remove" ? "Reset" : "Clear";
+    state.mode === "advancedCut" ? "导出剪辑计划" : state.mode === "remove" ? "保存字幕" : "导出计划";
+  els.clearPlan.textContent = state.mode === "remove" ? "重置字幕" : "清空计划";
   els.timestampNavMode.classList.toggle("active", state.submodTimeNav);
-  els.timestampNavMode.textContent = state.submodTimeNav ? "Time Edit" : "Time Nav";
+  els.timestampNavMode.textContent = state.submodTimeNav ? "编辑时间" : "时间跳转";
   els.timestampNavMode.title = state.submodTimeNav
     ? "Switch timestamps back to edit mode"
     : "Click timestamps to seek video instead of editing";

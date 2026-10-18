@@ -11,35 +11,36 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#video">跳到视频预览</a>
     <main class="app">
       <header class="topbar">
         <div class="brand">
           <span class="brand-mark">np</span>
           <div>
             <h1>npocut</h1>
-            <p id="projectStatus">No project loaded</p>
+            <p id="projectStatus" role="status">尚未载入素材</p>
           </div>
         </div>
         <div class="top-actions">
-          <button id="kbToggle" type="button" aria-expanded="false" aria-controls="kbPanel">From OntoKB</button>
+          <button id="kbToggle" type="button" aria-expanded="false" aria-controls="kbPanel">知识库素材</button>
           <label class="file-button">
             <input id="videoInput" type="file" accept="video/*" />
-            <span>Load Video</span>
+            <span>导入视频</span>
           </label>
           <label class="file-button secondary">
             <input id="srtInput" type="file" accept=".srt,text/plain" />
-            <span>Load SRT</span>
+            <span>导入字幕</span>
           </label>
           <label class="file-button secondary">
             <input id="planInput" type="file" accept=".csv,.txt,text/csv,text/plain" />
-            <span>Import Plan</span>
+            <span>导入计划</span>
           </label>
         </div>
       </header>
 
-      <section id="kbPanel" class="kb-panel" hidden aria-label="From OntoKB">
+      <section id="kbPanel" class="kb-panel" hidden aria-label="知识库素材">
         <div class="kb-toolbar">
-          <h2>From OntoKB</h2>
+          <h2>知识库素材</h2>
           <button id="kbRefresh" type="button">刷新知识库</button>
           <label class="file-button secondary"><input id="kbJson" type="file" accept=".json,application/json" /><span>导入 JSON</span></label>
           <label>语言 <select id="kbLang"><option value="zh">中文</option><option value="ja">日本語</option><option value="en">English</option></select></label>
@@ -50,76 +51,77 @@
         <p id="kbMessage" role="status"></p>
         <div id="kbLibrary" class="kb-library"></div>
       </section>
-      <section class="workspace">
-        <section class="media-panel">
+          <nav class="mode-tabs" aria-label="剪辑功能">
+            <button class="mode-tab active" data-mode="clip">片段剪辑</button>
+            <button class="mode-tab" data-mode="remove">字幕编辑</button>
+            <button class="mode-tab" data-mode="shorts">Shorts 短视频</button>
+            <button class="mode-tab" data-mode="advancedCut">精细剪辑</button>
+            <button class="mode-tab" data-mode="srt">生成字幕</button>
+            <button class="mode-tab" data-mode="burnSrt">烧录字幕</button>
+            <button class="mode-tab" data-mode="burnVerticalSrt">竖屏烧录</button>
+          </nav>
+      <section class="workspace" aria-label="剪辑工作台">
+        <section class="media-panel" aria-label="视频预览">
+          <div class="section-heading"><h2>源视频预览</h2><span>空格 播放 / 暂停 · IN / OUT 标记范围</span></div>
           <div id="videoShell" class="video-shell">
             <video id="video" controls playsinline></video>
             <div id="emptyVideo" class="empty-video">
-              <div class="empty-time">00:00.000</div>
-              <div class="empty-line"></div>
+              <span class="preview-symbol" aria-hidden="true">▷</span><h2>导入视频，开始剪辑</h2><p>使用右上方「导入视频」选择本地素材</p><div class="empty-time">00:00.000</div>
             </div>
             <div
               id="videoResizeHandle"
               class="video-resize-handle"
               role="separator"
               aria-orientation="horizontal"
-              title="Resize video"
+              title="拖动调整预览高度"
             ></div>
           </div>
 
           <div class="transport">
             <div class="seek-step-group">
-              <button id="back5" title="Back by step seconds" aria-label="Back by step seconds">-</button>
+              <button id="back5" title="按步长后退" aria-label="按步长后退">-</button>
               <input
                 id="seekStepInput"
                 class="seek-step-input"
                 inputmode="decimal"
                 value="5"
-                aria-label="Step seconds"
-                title="Step seconds"
+                aria-label="步长（秒）"
+                title="步长（秒）"
               />
-              <button id="forward5" title="Forward by step seconds" aria-label="Forward by step seconds">+</button>
+              <button id="forward5" title="按步长前进" aria-label="按步长前进">+</button>
             </div>
-            <button id="back1" title="Back 1 second" aria-label="Back 1 second">-1</button>
+            <button id="back1" title="后退 1 秒" aria-label="后退 1 秒">-1</button>
             <input
               id="timeReadout"
               class="time-readout"
               inputmode="decimal"
               value="00:00.000"
-              aria-label="Current timestamp"
-              title="Type a timestamp and press Enter"
+              aria-label="当前播放时间"
+              title="输入时间并按 Enter 跳转"
             />
-            <button id="forward1" title="Forward 1 second" aria-label="Forward 1 second">+1</button>
+            <button id="forward1" title="前进 1 秒" aria-label="前进 1 秒">+1</button>
           </div>
 
           <div class="mark-row">
             <button id="setIn" class="strong">IN</button>
-            <input id="startInput" inputmode="decimal" placeholder="00:00.000" />
+            <input id="startInput" aria-label="片段入点" inputmode="decimal" placeholder="00:00.000" />
             <button id="setOut" class="strong">OUT</button>
-            <input id="endInput" inputmode="decimal" placeholder="00:15.000" />
-            <input id="titleInput" placeholder="Label" />
-            <input id="outputInput" placeholder="short_01.mp4" />
-            <button id="addSegment" class="primary">Add</button>
+            <input id="endInput" aria-label="片段出点" inputmode="decimal" placeholder="00:15.000" />
+            <input id="titleInput" placeholder="片段名称" aria-label="片段名称" />
+            <input id="outputInput" placeholder="short_01.mp4" aria-label="输出文件名" />
+            <button id="addSegment" class="primary">添加片段</button>
           </div>
         </section>
 
         <aside class="side-panel">
-          <div class="mode-tabs" role="tablist">
-            <button class="mode-tab active" data-mode="clip">Cut</button>
-            <button class="mode-tab" data-mode="remove">Submod</button>
-            <button class="mode-tab" data-mode="shorts">Shorts</button>
-            <button class="mode-tab" data-mode="advancedCut">Adv Cut</button>
-            <button class="mode-tab" data-mode="srt">SRT</button>
-            <button class="mode-tab" data-mode="burnSrt">Burn SRT</button>
-            <button class="mode-tab" data-mode="burnVerticalSrt">Burn 9:16</button>
-          </div>
+<div class="section-heading"><h2>字幕工作区</h2><span>SRT / 文本与时间</span></div>
 
           <div class="subtitle-search">
             <div class="subtitle-tools">
-              <input id="srtQuery" placeholder="Search subtitles" />
-              <button id="timestampNavMode" class="secondary timestamp-nav" type="button">Time Nav</button>
-              <label class="height-control" title="Subtitle panel height">
-                <span>Height</span>
+              <input id="srtQuery" aria-label="搜索字幕内容" placeholder="搜索字幕内容" />
+              <button id="timestampNavMode" class="secondary timestamp-nav" type="button">时间跳转</button>
+              <label class="height-control" title="字幕面板高度">
+                <span>高度</span>
                 <input id="subtitleHeight" type="range" min="360" max="1400" step="20" />
               </label>
             </div>
@@ -128,11 +130,11 @@
 
           <div class="metric-strip">
             <div>
-              <span>Rows</span>
+              <span>片段数</span>
               <strong id="rowCount">0</strong>
             </div>
             <div>
-              <span>Total</span>
+              <span>总时长</span>
               <strong id="totalDuration">00:00.000</strong>
             </div>
           </div>
@@ -142,12 +144,12 @@
       <section class="plan-panel">
         <div class="plan-header">
           <div>
-            <h2 id="planTitle">Cut Plan</h2>
+            <h2 id="planTitle">剪辑计划</h2>
             <p id="planMeta">clip_plan.csv</p>
           </div>
           <div class="plan-actions">
-            <button id="clearPlan" class="secondary">Clear</button>
-            <button id="exportPlan" class="primary">Export</button>
+            <button id="clearPlan" class="secondary">清空</button>
+            <button id="exportPlan" class="primary">导出计划</button>
           </div>
         </div>
 
@@ -156,11 +158,11 @@
             <thead>
               <tr>
                 <th class="grab-col"></th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Duration</th>
-                <th>Label</th>
-                <th class="output-col">Output</th>
+                <th>入点</th>
+                <th>出点</th>
+                <th>时长</th>
+                <th>片段名称</th>
+                <th class="output-col">输出文件</th>
                 <th class="action-col"></th>
               </tr>
             </thead>
@@ -169,18 +171,18 @@
         </div>
 
         <div class="command-box">
-          <code id="commandText">Load media and add rows to generate a command.</code>
-          <button id="copyCommand" class="secondary">Copy</button>
+          <code id="commandText">导入素材并添加片段后，将在这里生成执行命令。</code>
+          <button id="copyCommand" class="secondary">复制命令</button>
           <button id="runCommand" class="primary">Terminal</button>
         </div>
 
         <div class="task-panel">
           <div class="task-header">
             <div class="task-state">
-              <span id="runtimeStatus">Runtime: Browser</span>
-              <span id="taskStatus">Idle</span>
+              <span id="runtimeStatus">运行环境：浏览器</span>
+              <span id="taskStatus">就绪</span>
             </div>
-            <button id="cancelTask" class="secondary" type="button" disabled>Cancel</button>
+            <button id="cancelTask" class="secondary" type="button" disabled>取消任务</button>
           </div>
           <pre id="taskLog" class="task-log" aria-live="polite"></pre>
         </div>
